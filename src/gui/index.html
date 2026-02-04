@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>PSD to Figma Converter</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 24px;
+      -webkit-app-region: drag;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      -webkit-app-region: no-drag;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg, #a855f7, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .file-drop {
+      border: 2px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .file-drop:hover, .file-drop.dragover {
+      border-color: #a855f7;
+      background: rgba(168, 85, 247, 0.1);
+      transform: scale(1.02);
+    }
+
+    .file-drop.dragover {
+      border-color: #22c55e;
+      background: rgba(34, 197, 94, 0.1);
+    }
+
+    .file-drop.dragover .file-drop-icon {
+      transform: scale(1.2);
+    }
+
+    .file-drop-icon {
+      transition: transform 0.3s ease;
+    }
+
+    .file-drop-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .file-drop-text {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    .file-drop-hint {
+      color: #64748b;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .file-selected {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: rgba(168, 85, 247, 0.1);
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+
+    .file-icon {
+      font-size: 32px;
+    }
+
+    .file-info {
+      flex: 1;
+    }
+
+    .file-name {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .file-details {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .btn-remove {
+      background: rgba(239, 68, 68, 0.2);
+      border: none;
+      color: #ef4444;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .output-path {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .output-path input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .output-path input:focus {
+      outline: none;
+      border-color: #a855f7;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-primary {
+      background: linear-gradient(90deg, #a855f7, #3b82f6);
+      color: #fff;
+      width: 100%;
+      padding: 16px;
+      font-size: 16px;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .layer-tree {
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .layer-item {
+      padding: 4px 0;
+      color: #94a3b8;
+    }
+
+    .layer-type {
+      color: #a855f7;
+      margin-right: 8px;
+    }
+
+    .layer-size {
+      color: #64748b;
+      margin-left: 8px;
+    }
+
+    .result {
+      display: none;
+    }
+
+    .result.show {
+      display: block;
+    }
+
+    .result-success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .result-title {
+      color: #22c55e;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      text-align: center;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    .result-extra {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .result-extra-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+
+    body.light-theme .result-extra {
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .result-actions .btn {
+      flex: 1;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .loading.show {
+      display: block;
+    }
+
+    .progress-container {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #a855f7, #3b82f6);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      color: #94a3b8;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .progress-percent {
+      color: #fff;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 32px;
+    }
+
+    .header-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .theme-toggle {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .theme-toggle:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: rotate(20deg);
+    }
+
+    /* 모달 */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: #1a1a2e;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-content h3 {
+      font-size: 14px;
+      color: #a855f7;
+      margin-bottom: 12px;
+      margin-top: 16px;
+    }
+
+    .modal-content h3:first-child {
+      margin-top: 0;
+    }
+
+    .shortcut-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .shortcut-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    kbd {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: monospace;
+    }
+
+    .feature-list {
+      list-style: none;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    body.light-theme .modal-content {
+      background: #fff;
+    }
+
+    body.light-theme kbd {
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    /* 라이트 테마 */
+    body.light-theme {
+      background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+      color: #1a1a2e;
+    }
+
+    body.light-theme .card {
+      background: rgba(255, 255, 255, 0.8);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+
+    body.light-theme .subtitle {
+      color: #64748b;
+    }
+
+    body.light-theme .card-title {
+      color: #64748b;
+    }
+
+    body.light-theme .file-drop {
+      border-color: rgba(0, 0, 0, 0.2);
+    }
+
+    body.light-theme .file-drop-text {
+      color: #64748b;
+    }
+
+    body.light-theme .output-path input {
+      background: rgba(0, 0, 0, 0.05);
+      border-color: rgba(0, 0, 0, 0.1);
+      color: #1a1a2e;
+    }
+
+    body.light-theme .layer-tree {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    body.light-theme .layer-item {
+      color: #64748b;
+    }
+
+    body.light-theme .theme-toggle {
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    body.light-theme h1 {
+      background: linear-gradient(90deg, #7c3aed, #2563eb);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* 애니메이션 */
+    .card {
+      animation: fadeInUp 0.5s ease;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .result-success {
+      animation: scaleIn 0.3s ease;
+    }
+
+    @keyframes scaleIn {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    /* Figma 안내 */
+    .figma-guide {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .guide-title {
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #3b82f6;
+    }
+
+    .guide-steps {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .guide-steps li {
+      margin-bottom: 4px;
+    }
+
+    .guide-steps code {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    .guide-note {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(59, 130, 246, 0.2);
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    body.light-theme .figma-guide {
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    body.light-theme .guide-steps code {
+      background: rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1>PSD/PSB to Figma</h1>
+        <p class="subtitle">포토샵 파일(PSD/PSB)을 Figma로 변환합니다. 레이어 구조가 유지됩니다.</p>
+      </div>
+    </div>
+
+    <!-- 파일 선택 -->
+    <div class="card" id="fileCard">
+      <div class="card-title">1. PSD/PSB 파일 선택</div>
+
+      <div id="fileDrop" class="file-drop">
+        <div class="file-drop-icon">📁</div>
+        <div class="file-drop-text">클릭하거나 파일을 드래그하세요</div>
+        <div class="file-drop-hint">PSD, PSB 파일 지원</div>
+      </div>
+
+      <div id="fileSelected" class="file-selected hidden">
+        <div class="file-icon">🎨</div>
+        <div class="file-info">
+          <div class="file-name" id="fileName"></div>
+          <div class="file-details" id="fileDetails"></div>
+        </div>
+        <button class="btn-remove" id="btnRemove">제거</button>
+      </div>
+    </div>
+
+    <!-- 레이어 미리보기 -->
+    <div class="card hidden" id="layerCard">
+      <div class="card-title">2. 레이어 구조</div>
+      <div class="layer-tree" id="layerTree"></div>
+    </div>
+
+    <!-- 출력 경로 -->
+    <div class="card hidden" id="outputCard">
+      <div class="card-title">3. 출력 폴더</div>
+      <div class="output-path">
+        <input type="text" id="outputPath" placeholder="출력 폴더를 선택하세요" readonly>
+        <button class="btn btn-secondary" id="btnSelectOutput">선택</button>
+      </div>
+    </div>
+
+    <!-- 변환 버튼 -->
+    <button class="btn btn-primary hidden" id="btnConvert" disabled>
+      Figma로 변환하기
+    </button>
+
+    <!-- 로딩 -->
+    <div class="loading" id="loading">
+      <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="progress-text" id="progressText">준비 중...</div>
+      <div class="progress-percent" id="progressPercent">0%</div>
+    </div>
+
+    <!-- 결과 -->
+    <div class="result" id="result">
+      <div class="result-success">
+        <div class="result-title">✅ 변환 완료!</div>
+        <div class="result-stats">
+          <div class="stat">
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-label">전체 레이어</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="statGroups">0</div>
+            <div class="stat-label">그룹</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="statText">0</div>
+            <div class="stat-label">텍스트</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="statImages">0</div>
+            <div class="stat-label">이미지</div>
+          </div>
+        </div>
+        <div class="result-extra" id="resultExtra"></div>
+      </div>
+
+      <!-- Figma 사용 안내 -->
+      <div class="figma-guide">
+        <div class="guide-title">📌 Figma에서 가져오기</div>
+        <ol class="guide-steps">
+          <li><strong>Figma 열기</strong> → 새 파일 또는 기존 파일</li>
+          <li><strong>Plugins</strong> → <strong>Development</strong> → <strong>Import plugin from manifest</strong></li>
+          <li><code>figma-plugin/manifest.json</code> 파일 선택</li>
+          <li><strong>Plugins</strong> → <strong>Development</strong> → <strong>PSD to Figma Import</strong> 실행</li>
+          <li><strong>output 폴더 선택</strong> (변환된 JSON + images 폴더)</li>
+          <li><strong>Import</strong> 버튼 클릭</li>
+        </ol>
+        <div class="guide-note">
+          💡 플러그인이 이미 등록되어 있으면 3번부터 진행하세요.
+        </div>
+      </div>
+
+      <div class="result-actions">
+        <button class="btn btn-secondary" id="btnOpenFolder">폴더 열기</button>
+        <button class="btn btn-primary" id="btnNewConvert">새 파일 변환</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedFile = null;
+    let outputDir = null;
+    let psdData = null;
+    let convertedJsonPath = null;
+
+    // 요소들
+    const fileDrop = document.getElementById('fileDrop');
+    const fileSelected = document.getElementById('fileSelected');
+    const fileName = document.getElementById('fileName');
+    const fileDetails = document.getElementById('fileDetails');
+    const btnRemove = document.getElementById('btnRemove');
+    const layerCard = document.getElementById('layerCard');
+    const layerTree = document.getElementById('layerTree');
+    const outputCard = document.getElementById('outputCard');
+    const outputPath = document.getElementById('outputPath');
+    const btnSelectOutput = document.getElementById('btnSelectOutput');
+    const btnConvert = document.getElementById('btnConvert');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+
+    // 파일 선택 (클릭)
+    fileDrop.addEventListener('click', async () => {
+      const path = await window.electronAPI.selectPsdFile();
+      if (path) {
+        await selectFile(path);
+      }
+    });
+
+    // 드래그앤드롭
+    fileDrop.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fileDrop.classList.add('dragover');
+    });
+
+    fileDrop.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fileDrop.classList.remove('dragover');
+    });
+
+    fileDrop.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fileDrop.classList.remove('dragover');
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        const ext = file.name.toLowerCase();
+        if (ext.endsWith('.psd') || ext.endsWith('.psb')) {
+          await selectFile(file.path);
+        } else {
+          alert('PSD 또는 PSB 파일만 지원합니다.');
+        }
+      }
+    });
+
+    // 전역 드래그 이벤트 방지
+    document.addEventListener('dragover', (e) => e.preventDefault());
+    document.addEventListener('drop', (e) => e.preventDefault());
+
+    // 키보드 단축키
+    document.addEventListener('keydown', async (e) => {
+      // Ctrl+O: 파일 열기
+      if (e.ctrlKey && e.key === 'o') {
+        e.preventDefault();
+        const path = await window.electronAPI.selectPsdFile();
+        if (path) await selectFile(path);
+      }
+      // Ctrl+Enter: 변환
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        if (!btnConvert.disabled) btnConvert.click();
+      }
+      // Escape: 초기화
+      if (e.key === 'Escape') {
+        resetUI();
+      }
+    });
+
+
+    // 파일 제거
+    btnRemove.addEventListener('click', () => {
+      resetUI();
+    });
+
+    // 출력 폴더 선택
+    btnSelectOutput.addEventListener('click', async () => {
+      const path = await window.electronAPI.selectOutputFolder();
+      if (path) {
+        outputDir = path;
+        outputPath.value = path;
+        updateConvertButton();
+      }
+    });
+
+    // 프로그래스바 요소
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const progressPercent = document.getElementById('progressPercent');
+
+    // 진행률 업데이트 리스너
+    window.electronAPI.onProgress((progress) => {
+      progressBar.style.width = progress.percent + '%';
+      progressText.textContent = progress.message;
+      progressPercent.textContent = progress.percent + '%';
+    });
+
+    // 변환 버튼
+    btnConvert.addEventListener('click', async () => {
+      if (!selectedFile || !outputDir) return;
+
+      // CLI 모드 확인 (2GB+ 파일)
+      if (btnConvert.dataset.useCli === 'true') {
+        const result = await window.electronAPI.runCliConvert(selectedFile, outputDir);
+        if (result.success) {
+          alert('CLI가 새 터미널에서 실행되었습니다.\n\n터미널에서 변환 완료 후 Figma에서 import 하세요.');
+        } else {
+          alert('CLI 실행 실패: ' + result.error);
+        }
+        return;
+      }
+
+      // 일반 변환
+      progressBar.style.width = '0%';
+      progressText.textContent = '준비 중...';
+      progressPercent.textContent = '0%';
+
+      showLoading(true);
+
+      const result = await window.electronAPI.convertPsd(selectedFile, outputDir);
+
+      showLoading(false);
+
+      if (result.success) {
+        showResult(result.data);
+      } else {
+        alert('변환 실패: ' + result.error);
+      }
+    });
+
+    // 폴더 열기
+    document.getElementById('btnOpenFolder').addEventListener('click', () => {
+      if (outputDir) {
+        window.electronAPI.openFolder(outputDir);
+      }
+    });
+
+    // 새 파일 변환
+    document.getElementById('btnNewConvert').addEventListener('click', () => {
+      resetUI();
+    });
+
+    async function selectFile(path) {
+      selectedFile = path;
+
+      // 프로그래스바 초기화 및 표시
+      progressBar.style.width = '0%';
+      progressText.textContent = '파일 분석 중...';
+      progressPercent.textContent = '0%';
+      showLoading(true);
+
+      // 분석
+      const result = await window.electronAPI.analyzePsd(path);
+
+      showLoading(false);
+
+      if (!result.success) {
+        alert('파일 분석 실패: ' + result.error);
+        return;
+      }
+
+      psdData = result.data;
+
+      // UI 업데이트
+      fileDrop.classList.add('hidden');
+      fileSelected.classList.remove('hidden');
+      const ext = path.toLowerCase().endsWith('.psb') ? '.psb' : '.psd';
+      fileName.textContent = psdData.name + ext;
+
+      // 대용량 파일 여부 확인
+      if (psdData.isTooLarge) {
+        // 초대용량 파일 (2GB+): CLI로 실행
+        fileDetails.innerHTML = `⚠️ <strong>${(psdData.fileSizeMB / 1024).toFixed(1)}GB</strong> - 별도 터미널에서 CLI로 변환됩니다`;
+
+        // 레이어 트리 숨김, 버튼 텍스트 변경
+        layerCard.classList.add('hidden');
+        btnConvert.disabled = false;
+        btnConvert.textContent = '🖥️ CLI로 변환 (터미널 열기)';
+        btnConvert.dataset.useCli = 'true';
+      } else if (psdData.isLargeFile) {
+        // 대용량 파일 (500MB~2GB): 스트리밍 모드
+        fileDetails.textContent = `📦 ${psdData.fileSizeMB}MB - 스트리밍 모드로 변환됩니다`;
+
+        // 레이어 트리 숨김
+        layerCard.classList.add('hidden');
+      } else {
+        // 일반 파일: 상세 정보 표시
+        let details = `${psdData.width} x ${psdData.height}px · ${psdData.layerCount} layers`;
+        if (psdData.resolution) {
+          details += ` · ${psdData.resolution.horizontal} ${psdData.resolution.horizontalUnit}`;
+        }
+        if (psdData.guides && psdData.guides.length > 0) {
+          details += ` · ${psdData.guides.length} guides`;
+        }
+        fileDetails.textContent = details;
+
+        // 레이어 트리 표시
+        layerCard.classList.remove('hidden');
+        layerTree.innerHTML = renderLayerTree(psdData.layers);
+      }
+
+      // 출력 설정 표시
+      outputCard.classList.remove('hidden');
+      btnConvert.classList.remove('hidden');
+
+      // 기본 출력 경로 설정
+      const dir = path.substring(0, path.lastIndexOf('\\') || path.lastIndexOf('/'));
+      outputDir = dir + '/output';
+      outputPath.value = outputDir;
+
+      updateConvertButton();
+    }
+
+    function renderLayerTree(layers, indent = 0) {
+      let html = '';
+      for (const layer of layers) {
+        const prefix = '  '.repeat(indent);
+        const typeLabel = {
+          'group': '📁',
+          'text': '📝',
+          'layer': '🖼️',
+          'shape': '⬡',
+          'adjustment': '🎚️'
+        }[layer.type] || '◻️';
+
+        // 태그 생성
+        let tags = [];
+        if (layer.effects) tags.push('fx');
+        if (layer.clipping) tags.push('clip');
+        if (layer.mask) tags.push('mask');
+        if (layer.vectorMask) tags.push('vmask');
+        if (layer.vectorStroke) tags.push('stroke');
+        if (layer.placedLayer) tags.push('placed');
+        if (layer.smartFilters) tags.push('filter');
+        const tagStr = tags.length > 0 ? ` <span style="color:#a855f7;font-size:10px">[${tags.join(' ')}]</span>` : '';
+
+        html += `<div class="layer-item">${prefix}<span class="layer-type">${typeLabel}</span>${layer.name}<span class="layer-size">${layer.bounds.width}x${layer.bounds.height}</span>${tagStr}</div>`;
+
+        if (layer.children) {
+          html += renderLayerTree(layer.children, indent + 1);
+        }
+      }
+      return html;
+    }
+
+    function updateConvertButton() {
+      btnConvert.disabled = !selectedFile || !outputDir;
+    }
+
+    function showLoading(show) {
+      loading.classList.toggle('show', show);
+      btnConvert.classList.toggle('hidden', show);
+    }
+
+    function showResult(data) {
+      document.getElementById('fileCard').classList.add('hidden');
+      layerCard.classList.add('hidden');
+      outputCard.classList.add('hidden');
+      btnConvert.classList.add('hidden');
+
+      // CLI 모드 결과 (summary.message가 있는 경우)
+      if (data.summary && data.summary.message) {
+        document.getElementById('statTotal').textContent = '-';
+        document.getElementById('statGroups').textContent = '-';
+        document.getElementById('statText').textContent = '-';
+        document.getElementById('statImages').textContent = '-';
+
+        let extraHtml = `<div class="result-extra-item"><span>처리 방식</span><span>CLI 프로세스</span></div>`;
+        if (data.files && data.files.length > 0) {
+          extraHtml += `<div class="result-extra-item"><span>출력 파일</span><span>${data.files.length}개</span></div>`;
+        }
+        extraHtml += `<div class="result-extra-item"><span>상태</span><span>${data.summary.message}</span></div>`;
+        document.getElementById('resultExtra').innerHTML = extraHtml;
+      } else {
+        // 일반 모드 결과
+        document.getElementById('statTotal').textContent = data.summary.totalLayers || 0;
+        document.getElementById('statGroups').textContent = data.summary.groups || 0;
+        document.getElementById('statText').textContent = data.summary.textLayers || 0;
+        document.getElementById('statImages').textContent = data.summary.imageLayers || 0;
+
+        // 추가 정보 표시
+        let extraHtml = '';
+        if (data.summary.shapeLayers > 0) {
+          extraHtml += `<div class="result-extra-item"><span>도형 레이어</span><span>${data.summary.shapeLayers}</span></div>`;
+        }
+        if (data.summary.adjustmentLayers > 0) {
+          extraHtml += `<div class="result-extra-item"><span>조정 레이어</span><span>${data.summary.adjustmentLayers}</span></div>`;
+        }
+        if (data.summary.smartFilterLayers > 0) {
+          extraHtml += `<div class="result-extra-item"><span>스마트 필터</span><span>${data.summary.smartFilterLayers}</span></div>`;
+        }
+        if (data.files && data.files.length > 0) {
+          extraHtml += `<div class="result-extra-item"><span>출력 파일</span><span>${data.files.length}개</span></div>`;
+        }
+        document.getElementById('resultExtra').innerHTML = extraHtml;
+      }
+
+      // 출력 폴더 업데이트
+      if (data.outputDir) {
+        outputDir = data.outputDir;
+      }
+
+      convertedJsonPath = data.jsonPath;
+      result.classList.add('show');
+    }
+
+    function resetUI() {
+      selectedFile = null;
+      outputDir = null;
+      psdData = null;
+
+      fileDrop.classList.remove('hidden');
+      fileSelected.classList.add('hidden');
+      layerCard.classList.add('hidden');
+      outputCard.classList.add('hidden');
+      btnConvert.classList.add('hidden');
+      btnConvert.textContent = 'Figma로 변환하기';
+      btnConvert.disabled = false;
+      btnConvert.dataset.useCli = '';
+      result.classList.remove('show');
+      document.getElementById('fileCard').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

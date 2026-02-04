@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+release/
+
+# Output
+output/
+
+# Test files
+*.psd
+*.psb
+psd/
+
+# Logs
+*.log
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Dev scripts
+debug.bat
+gui.bat
+analyze-features.js

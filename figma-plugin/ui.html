@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 12px;
+      padding: 16px;
+      background: #fff;
+    }
+    h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #333;
+    }
+    .description {
+      color: #666;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .file-input-wrapper {
+      margin-bottom: 16px;
+    }
+    .file-input-wrapper label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px dashed #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    input[type="file"]:hover {
+      border-color: #18a0fb;
+    }
+    input[type="file"]:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .preview {
+      background: #f5f5f5;
+      border-radius: 4px;
+      padding: 12px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .preview.active {
+      display: block;
+    }
+    .preview h3 {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .preview-info {
+      font-size: 11px;
+      color: #666;
+    }
+    .preview-info div {
+      margin-bottom: 4px;
+    }
+    .status {
+      color: #18a0fb;
+      font-size: 11px;
+      margin-top: 8px;
+    }
+    .status.error {
+      color: #f24822;
+    }
+    .buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    button.primary {
+      background: #18a0fb;
+      color: white;
+    }
+    button.primary:hover {
+      background: #0d8ce9;
+    }
+    button.primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    button.secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .progress-section {
+      margin-bottom: 16px;
+    }
+
+    .progress-bar-container {
+      width: 100%;
+      height: 6px;
+      background: #e0e0e0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #18a0fb, #a259ff);
+      transition: width 0.2s ease;
+    }
+
+    .progress-text {
+      font-size: 11px;
+      color: #666;
+      text-align: center;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .stat-item {
+      background: #f0f0f0;
+      padding: 8px;
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: #18a0fb;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.9);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #18a0fb;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      margin-top: 12px;
+      color: #666;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h2>PSD/PSB to Figma Import</h2>
+
+  <p class="description">
+    output 폴더를 선택하세요. JSON과 이미지가 자동으로 로드됩니다.
+  </p>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">처리 중...</div>
+  </div>
+
+  <div class="progress-section" id="progressSection" style="display:none;">
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="progress-text" id="progressText">준비 중...</div>
+  </div>
+
+  <div class="file-input-wrapper">
+    <label>Select output folder:</label>
+    <input type="file" id="folderInput" webkitdirectory multiple />
+  </div>
+
+  <div class="preview" id="preview">
+    <h3>File Preview</h3>
+    <div class="preview-info">
+      <div><strong>Name:</strong> <span id="fileName"></span></div>
+      <div><strong>Canvas:</strong> <span id="canvasSize"></span></div>
+    </div>
+    <div class="stats">
+      <div class="stat-item">
+        <div class="stat-value" id="layerCount">0</div>
+        <div class="stat-label">레이어</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="imageCount">0</div>
+        <div class="stat-label">이미지</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="textCount">0</div>
+        <div class="stat-label">텍스트</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="groupCount">0</div>
+        <div class="stat-label">그룹</div>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="buttons">
+    <button class="secondary" id="cancelBtn">Cancel</button>
+    <button class="primary" id="importBtn" disabled>Import</button>
+  </div>
+
+  <script>
+    let psdData = null;
+    let imageDataMap = {};
+    let isProcessing = false;
+
+    // UI 업데이트를 위한 프레임 대기
+    function nextFrame() {
+      return new Promise(resolve => requestAnimationFrame(resolve));
+    }
+
+    // 지연 실행 (UI 블로킹 방지)
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // 로딩 오버레이 표시
+    function showLoading(text) {
+      document.getElementById('loadingText').textContent = text;
+      document.getElementById('loadingOverlay').classList.add('active');
+    }
+
+    // 로딩 오버레이 숨김
+    function hideLoading() {
+      document.getElementById('loadingOverlay').classList.remove('active');
+    }
+
+    // 상태 업데이트
+    function updateStatus(text, isError = false) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = text;
+      statusEl.classList.toggle('error', isError);
+    }
+
+    // 진행률 업데이트
+    function updateProgress(percent, text) {
+      document.getElementById('progressBar').style.width = percent + '%';
+      document.getElementById('progressText').textContent = text;
+    }
+
+    // 이미지를 청크 단위로 로드 (UI 블로킹 방지)
+    async function loadImagesInChunks(imageFiles, chunkSize = 3) {
+      const result = {};
+      const total = imageFiles.length;
+
+      for (let i = 0; i < total; i += chunkSize) {
+        const chunk = imageFiles.slice(i, Math.min(i + chunkSize, total));
+
+        // 청크 내 이미지들을 병렬로 로드
+        const chunkResults = await Promise.all(
+          chunk.map(async (imgFile) => {
+            const arrayBuffer = await imgFile.arrayBuffer();
+            // Uint8Array를 base64로 변환
+            const uint8Array = new Uint8Array(arrayBuffer);
+            const base64 = uint8ArrayToBase64(uint8Array);
+            return { name: imgFile.name, data: base64 };
+          })
+        );
+
+        // 결과 저장
+        for (const item of chunkResults) {
+          result[item.name] = item.data;
+        }
+
+        // 진행률 업데이트 및 UI 갱신 대기
+        const loaded = Math.min(i + chunkSize, total);
+        const percent = Math.round((loaded / total) * 100);
+        updateStatus(`이미지 로딩 중... (${loaded}/${total})`);
+        showLoading(`이미지 로딩 중... ${percent}%`);
+
+        // UI 업데이트를 위한 프레임 대기
+        await nextFrame();
+      }
+
+      return result;
+    }
+
+    // Uint8Array를 base64로 변환
+    function uint8ArrayToBase64(uint8Array) {
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+        binary += String.fromCharCode.apply(null, chunk);
+      }
+      return btoa(binary);
+    }
+
+    // 폴더 선택 이벤트
+    document.getElementById('folderInput').addEventListener('change', async (e) => {
+      if (isProcessing) return;
+
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+
+      // JSON 파일 찾기
+      const jsonFile = files.find(f => f.name.endsWith('_figma.json'));
+      if (!jsonFile) {
+        alert('_figma.json 파일을 찾을 수 없습니다.');
+        return;
+      }
+
+      // 이미지 파일들 찾기
+      const imageFiles = files.filter(f =>
+        f.name.endsWith('.png') && f.webkitRelativePath.includes('/images/')
+      );
+
+      isProcessing = true;
+      document.getElementById('folderInput').disabled = true;
+      document.getElementById('importBtn').disabled = true;
+
+      try {
+        showLoading('JSON 파일 파싱 중...');
+        await nextFrame();
+
+        // JSON 파싱
+        const text = await jsonFile.text();
+        await nextFrame();
+
+        psdData = JSON.parse(text);
+        await nextFrame();
+
+        // 통계 계산 (대용량 데이터의 경우 비동기로)
+        showLoading('레이어 분석 중...');
+        await nextFrame();
+
+        const stats = countNodeStats(psdData.nodes);
+        await nextFrame();
+
+        // 미리보기 업데이트
+        document.getElementById('fileName').textContent = psdData.name;
+        document.getElementById('canvasSize').textContent =
+          psdData.canvas.width + ' x ' + psdData.canvas.height + 'px';
+        document.getElementById('layerCount').textContent = stats.total;
+        document.getElementById('imageCount').textContent = imageFiles.length;
+        document.getElementById('textCount').textContent = stats.text;
+        document.getElementById('groupCount').textContent = stats.groups;
+
+        // 이미지 로딩 (청크 단위)
+        if (imageFiles.length > 0) {
+          imageDataMap = await loadImagesInChunks(imageFiles, 5);
+        } else {
+          imageDataMap = {};
+        }
+
+        hideLoading();
+        updateStatus('준비 완료!');
+        document.getElementById('preview').classList.add('active');
+        document.getElementById('importBtn').disabled = false;
+
+      } catch (err) {
+        hideLoading();
+        alert('Error: ' + err.message);
+        console.error(err);
+        psdData = null;
+        imageDataMap = {};
+        document.getElementById('preview').classList.remove('active');
+        document.getElementById('importBtn').disabled = true;
+      } finally {
+        isProcessing = false;
+        document.getElementById('folderInput').disabled = false;
+      }
+    });
+
+    // Import 버튼 클릭
+    document.getElementById('importBtn').addEventListener('click', async () => {
+      if (!psdData || isProcessing) return;
+
+      isProcessing = true;
+      document.getElementById('importBtn').disabled = true;
+      document.getElementById('folderInput').disabled = true;
+      document.getElementById('progressSection').style.display = 'block';
+      updateProgress(0, 'Figma로 전송 준비 중...');
+      updateStatus('');
+
+      await nextFrame();
+
+      // 진행률 애니메이션
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 2;
+        if (progress <= 90) {
+          updateProgress(progress, `Figma로 전송 중... ${progress}%`);
+        }
+      }, 100);
+
+      try {
+        // 데이터 전송
+        parent.postMessage({
+          pluginMessage: {
+            type: 'import-psd',
+            data: psdData,
+            images: imageDataMap
+          }
+        }, '*');
+
+      } catch (err) {
+        clearInterval(interval);
+        updateProgress(0, '');
+        updateStatus('전송 실패: ' + err.message, true);
+        document.getElementById('importBtn').disabled = false;
+        isProcessing = false;
+      }
+
+      // 완료 메시지 대기
+      window.onmessage = (event) => {
+        if (event.data.pluginMessage) {
+          clearInterval(interval);
+          updateProgress(100, '완료!');
+          updateStatus('Figma에서 결과를 확인하세요.');
+          isProcessing = false;
+          document.getElementById('folderInput').disabled = false;
+        }
+      };
+    });
+
+    // Cancel 버튼 클릭
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
+    });
+
+    // 노드 통계 계산
+    function countNodeStats(nodes) {
+      let stats = { total: 0, text: 0, groups: 0, images: 0 };
+      for (const node of nodes) {
+        stats.total++;
+        if (node.type === 'TEXT') stats.text++;
+        if (node.type === 'GROUP') stats.groups++;
+        if (node.imageFileName) stats.images++;
+        if (node.children) {
+          const childStats = countNodeStats(node.children);
+          stats.total += childStats.total;
+          stats.text += childStats.text;
+          stats.groups += childStats.groups;
+          stats.images += childStats.images;
+        }
+      }
+      return stats;
+    }
+  </script>
+</body>
+</html>

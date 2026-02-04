@@ -1,0 +1,83 @@
+{
+  "name": "psd-to-figma",
+  "version": "1.0.0",
+  "description": "Convert PSD files to Figma with layer preservation",
+  "main": "dist/gui/main.js",
+  "bin": {
+    "psd2figma": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node --max-old-space-size=8192 dist/cli/index.js",
+    "gui": "set NODE_OPTIONS=--max-old-space-size=16384 --expose-gc && electron dist/gui/main.js",
+    "convert": "node --max-old-space-size=8192 dist/cli/index.js convert",
+    "test": "jest",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win"
+  },
+  "keywords": [
+    "psd",
+    "figma",
+    "converter",
+    "photoshop"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "ag-psd": "^30.1.0",
+    "axios": "^1.13.4",
+    "canvas": "^3.2.1",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "sharp": "^0.34.5",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0",
+    "electron": "^40.1.0",
+    "electron-builder": "^26.7.0"
+  },
+  "build": {
+    "appId": "com.psd-to-figma.app",
+    "productName": "PSD to Figma",
+    "copyright": "Copyright © 2025",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/gui/index.html",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "figma-plugin",
+        "to": "figma-plugin"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": ["ko", "en"],
+      "language": "1042"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "dist/**/*",
+      "node_modules/**/*"
+    ]
+  }
+}

@@ -490,8 +490,12 @@ export class PsdParser {
       fontSize = 16;
     }
 
+    // 텍스트에서 Photoshop 단락 구분자(\u0003)를 줄바꿈으로 변환
+    let text = textInfo.text || '';
+    text = text.replace(/\u0003/g, '\n');
+
     return {
-      text: textInfo.text || '',
+      text,
       fontSize,
       fontFamily,
       fontStyle,
@@ -557,7 +561,8 @@ export class PsdParser {
 
     for (const run of styleRuns) {
       const runLength = run.length || 0;
-      const runText = fullText.substring(currentPos, currentPos + runLength);
+      // Photoshop 단락 구분자(\u0003)를 줄바꿈으로 변환
+      const runText = fullText.substring(currentPos, currentPos + runLength).replace(/\u0003/g, '\n');
       currentPos += runLength;
 
       if (runText.length === 0) continue;

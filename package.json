@@ -10,7 +10,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node --max-old-space-size=8192 dist/cli/index.js",
-    "gui": "cross-env NODE_OPTIONS='--max-old-space-size=16384 --expose-gc' electron dist/gui/main.js",
+    "gui": "cross-env NODE_OPTIONS=--max-old-space-size=16384 electron dist/gui/main.js",
     "convert": "node --max-old-space-size=8192 dist/cli/index.js convert",
     "test": "jest",
     "pack": "electron-builder --dir",

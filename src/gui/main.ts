@@ -62,6 +62,9 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../../src/gui/index.html'));
 
+  // 개발자 도구 열기 (F12로도 열 수 있음)
+  mainWindow.webContents.openDevTools();
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -82,6 +85,15 @@ app.on('activate', () => {
 });
 
 // IPC 핸들러들
+
+// 경로 유틸리티
+ipcMain.handle('get-dirname', (_event, filePath: string) => {
+  return path.dirname(filePath);
+});
+
+ipcMain.handle('join-path', (_event, ...paths: string[]) => {
+  return path.join(...paths);
+});
 
 // 파일 선택 다이얼로그 (단일)
 ipcMain.handle('select-psd-file', async () => {

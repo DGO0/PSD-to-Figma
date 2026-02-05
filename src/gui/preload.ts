@@ -1,10 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import * as path from 'path';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // 경로 유틸리티 (크로스 플랫폼)
-  getDirname: (filePath: string) => path.dirname(filePath),
-  joinPath: (...paths: string[]) => path.join(...paths),
+  // 경로 유틸리티 (IPC를 통해 main process에서 처리)
+  getDirname: (filePath: string) => ipcRenderer.invoke('get-dirname', filePath),
+  joinPath: (...paths: string[]) => ipcRenderer.invoke('join-path', ...paths),
   // 드래그앤드롭 파일 경로 가져오기
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   selectPsdFile: () => ipcRenderer.invoke('select-psd-file'),

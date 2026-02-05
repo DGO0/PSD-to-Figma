@@ -331,6 +331,12 @@ export class PsdParser {
     if (layer.children && layer.children.length > 0) {
       baseInfo.type = 'group';
       baseInfo.children = this.parseLayers(layer.children);
+
+      // 그룹 bounds가 0인 경우 자식들로부터 계산
+      if (baseInfo.bounds.width === 0 || baseInfo.bounds.height === 0) {
+        const childBounds = this.calculateGroupBounds(baseInfo.children);
+        baseInfo.bounds = childBounds;
+      }
       return baseInfo;
     }
 
@@ -354,6 +360,53 @@ export class PsdParser {
     }
 
     return baseInfo;
+  }
+
+  // 그룹의 bounds를 자식 레이어들로부터 계산
+  private calculateGroupBounds(children: PsdLayerInfo[]): PsdLayerInfo['bounds'] {
+    if (!children || children.length === 0) {
+      return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    }
+
+    let minLeft = Infinity;
+    let minTop = Infinity;
+    let maxRight = -Infinity;
+    let maxBottom = -Infinity;
+
+    const processLayer = (layer: PsdLayerInfo) => {
+      const left = layer.bounds.left;
+      const top = layer.bounds.top;
+      const right = layer.bounds.left + layer.bounds.width;
+      const bottom = layer.bounds.top + layer.bounds.height;
+
+      if (layer.bounds.width > 0 && layer.bounds.height > 0) {
+        minLeft = Math.min(minLeft, left);
+        minTop = Math.min(minTop, top);
+        maxRight = Math.max(maxRight, right);
+        maxBottom = Math.max(maxBottom, bottom);
+      }
+
+      // 자식 그룹도 재귀적으로 처리
+      if (layer.children) {
+        layer.children.forEach(processLayer);
+      }
+    };
+
+    children.forEach(processLayer);
+
+    // 유효한 bounds가 없으면 0 반환
+    if (minLeft === Infinity) {
+      return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    }
+
+    return {
+      top: minTop,
+      left: minLeft,
+      right: maxRight,
+      bottom: maxBottom,
+      width: maxRight - minLeft,
+      height: maxBottom - minTop,
+    };
   }
 
   private getLayerType(layer: Layer): PsdLayerInfo['type'] {
@@ -441,39 +494,51 @@ export class PsdParser {
       }
     }
 
-    // paragraphStyleRuns에서 추가 정보 추출
+    // paragraphStyle에서 텍스트 정렬 추출
     let textAlign: 'left' | 'center' | 'right' | 'justify' | undefined;
-    const paragraphStyleRuns = (textInfo as any).paragraphStyleRuns;
-    if (paragraphStyleRuns && paragraphStyleRuns.length > 0) {
-      const firstPara = paragraphStyleRuns[0];
-      if (firstPara.style) {
-        // 텍스트 정렬
-        if (firstPara.style.justification) {
-          const justMap: Record<string, 'left' | 'center' | 'right' | 'justify'> = {
-            'left': 'left',
-            'center': 'center',
-            'right': 'right',
-            'justifyAll': 'justify',
-            'justifyLeft': 'justify',
-            'justifyCenter': 'justify',
-            'justifyRight': 'justify',
-          };
-          textAlign = justMap[firstPara.style.justification] || 'left';
-        }
+    const paragraphStyle = (textInfo as any).paragraphStyle;
+    if (paragraphStyle && paragraphStyle.justification) {
+      const justMap: Record<string, 'left' | 'center' | 'right' | 'justify'> = {
+        'left': 'left',
+        'center': 'center',
+        'right': 'right',
+        'justifyAll': 'justify',
+        'justifyLeft': 'justify',
+        'justifyCenter': 'justify',
+        'justifyRight': 'justify',
+      };
+      textAlign = justMap[paragraphStyle.justification] || 'left';
+    }
 
-        if (firstPara.style.defaultStyle) {
-          const ds = firstPara.style.defaultStyle;
-          if (!fontFamily && ds.font) {
-            fontFamily = ds.font.name || '';
-            if (fontFamily.includes('-')) {
-              const parts = fontFamily.split('-');
-              fontFamily = parts[0];
-              fontStyle = parts.slice(1).join('-');
-            }
+    // paragraphStyleRuns에서 추가 정보 추출 (폴백)
+    const paragraphStyleRuns = (textInfo as any).paragraphStyleRuns;
+    if (!textAlign && paragraphStyleRuns && paragraphStyleRuns.length > 0) {
+      const firstPara = paragraphStyleRuns[0];
+      if (firstPara.style && firstPara.style.justification) {
+        const justMap: Record<string, 'left' | 'center' | 'right' | 'justify'> = {
+          'left': 'left',
+          'center': 'center',
+          'right': 'right',
+          'justifyAll': 'justify',
+          'justifyLeft': 'justify',
+          'justifyCenter': 'justify',
+          'justifyRight': 'justify',
+        };
+        textAlign = justMap[firstPara.style.justification] || 'left';
+      }
+
+      if (firstPara.style && firstPara.style.defaultStyle) {
+        const ds = firstPara.style.defaultStyle;
+        if (!fontFamily && ds.font) {
+          fontFamily = ds.font.name || '';
+          if (fontFamily.includes('-')) {
+            const parts = fontFamily.split('-');
+            fontFamily = parts[0];
+            fontStyle = parts.slice(1).join('-');
           }
-          if (!fontSize && ds.fontSize) {
-            fontSize = ds.fontSize;
-          }
+        }
+        if (!fontSize && ds.fontSize) {
+          fontSize = ds.fontSize;
         }
       }
     }

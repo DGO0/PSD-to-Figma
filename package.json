@@ -10,12 +10,14 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node --max-old-space-size=8192 dist/cli/index.js",
-    "gui": "set NODE_OPTIONS=--max-old-space-size=16384 --expose-gc && electron dist/gui/main.js",
+    "gui": "cross-env NODE_OPTIONS='--max-old-space-size=16384 --expose-gc' electron dist/gui/main.js",
     "convert": "node --max-old-space-size=8192 dist/cli/index.js convert",
     "test": "jest",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "dist:win": "electron-builder --win"
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:all": "electron-builder --win --mac"
   },
   "keywords": [
     "psd",
@@ -37,6 +39,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.2.0",
+    "cross-env": "^7.0.3",
     "electron": "^40.1.0",
     "electron-builder": "^26.7.0"
   },
@@ -67,6 +70,31 @@
         }
       ],
       "icon": null
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

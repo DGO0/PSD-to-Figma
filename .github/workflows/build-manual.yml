@@ -1,0 +1,75 @@
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Target Platform'
+        required: true
+        type: choice
+        options:
+          - windows
+          - mac
+          - both
+
+jobs:
+  build-windows:
+    if: ${{ inputs.platform == 'windows' || inputs.platform == 'both' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Build Windows installer
+        run: npm run dist:win
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSD-to-Figma-Windows
+          path: release/*.exe
+          retention-days: 30
+
+  build-mac:
+    if: ${{ inputs.platform == 'mac' || inputs.platform == 'both' }}
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install native dependencies
+        run: brew install pkg-config cairo pango libpng jpeg giflib librsvg
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Build Mac DMG
+        run: npm run dist:mac
+
+      - name: Upload Mac artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSD-to-Figma-Mac
+          path: release/*.dmg
+          retention-days: 30

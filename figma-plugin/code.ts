@@ -165,13 +165,22 @@ figma.ui.onmessage = async (msg: { type: string; data?: FigmaExportData; images?
       // 이미지 데이터 변환 및 저장
       if (msg.images && typeof msg.images === 'object') {
         imageStore.clear();
-        for (const [fileName, base64Data] of Object.entries(msg.images)) {
+        const imageEntries = Object.entries(msg.images);
+        console.log(`Received ${imageEntries.length} images from UI`);
+        for (const [fileName, base64Data] of imageEntries) {
           const decoded = safeBase64Decode(base64Data);
           if (decoded) {
             imageStore.set(fileName, decoded);
+          } else {
+            console.log(`Failed to decode image: ${fileName}`);
           }
         }
-        console.log(`Loaded ${imageStore.size} images`);
+        console.log(`Successfully loaded ${imageStore.size} images`);
+        // 처음 5개 이미지 이름 로그
+        const imageNames = Array.from(imageStore.keys()).slice(0, 5);
+        console.log(`First images: ${imageNames.join(', ')}`);
+      } else {
+        console.log('No images received from UI');
       }
 
       await importPsdData(msg.data);
@@ -290,7 +299,18 @@ async function createClippingGroup(
   // 베이스 노드 생성 (마스크로 설정)
   const baseCreated = await createNodeInFrame(baseNode, clipFrame, 0, 0);
   if (baseCreated && 'isMask' in baseCreated) {
+    // 먼저 채우기 정보 저장
+    const savedFills = 'fills' in baseCreated ? [...(baseCreated as GeometryMixin).fills as Paint[]] : [];
+
+    // 마스크 설정
     (baseCreated as unknown as { isMask: boolean }).isMask = true;
+
+    // 채우기 복원 (마스크 설정으로 인해 사라질 수 있음)
+    if (savedFills.length > 0 && 'fills' in baseCreated) {
+      (baseCreated as GeometryMixin).fills = savedFills;
+    }
+
+    console.log(`Clipping mask created: ${baseNode.name}, fills: ${savedFills.length}`);
   }
 
   // 클리핑된 노드들 생성
@@ -849,6 +869,9 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
     imageData = safeBase64Decode(nodeData.imageData);
   } else if (nodeData.imageFileName) {
     imageData = imageStore.get(nodeData.imageFileName) || null;
+    if (!imageData) {
+      console.log(`Image not found in store: ${nodeData.imageFileName}, store has: ${imageStore.size} images`);
+    }
   }
 
   if (imageData) {
@@ -914,7 +937,7 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
       rect.fills = fills;
       console.log(`Applied fill to: ${nodeData.name}, fills: ${fills.length}`);
     } else if (nodeData.imageFileName) {
-      // 이미지 파일명은 있지만 데이터가 없는 경우 - vectorFill도 확인
+      // 이미지 파일명은 있지만 데이터가 없는 경우
       console.log(`No image data for: ${nodeData.name}, imageFileName: ${nodeData.imageFileName}`);
       rect.fills = [{
         type: 'SOLID',

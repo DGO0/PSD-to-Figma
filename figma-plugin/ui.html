@@ -356,10 +356,13 @@
       }
 
       // 이미지 파일들 찾기 (Windows/Mac 경로 모두 지원)
-      const imageFiles = files.filter(f =>
-        f.name.endsWith('.png') &&
-        (f.webkitRelativePath.includes('/images/') || f.webkitRelativePath.includes('\\images\\'))
-      );
+      // webkitRelativePath를 모두 소문자로 변환하고 백슬래시를 슬래시로 통일
+      const imageFiles = files.filter(f => {
+        if (!f.name.endsWith('.png')) return false;
+        const normalizedPath = f.webkitRelativePath.toLowerCase().replace(/\\/g, '/');
+        return normalizedPath.includes('/images/');
+      });
+      console.log('Found image files:', imageFiles.length, imageFiles.map(f => f.name));
 
       isProcessing = true;
       document.getElementById('folderInput').disabled = true;

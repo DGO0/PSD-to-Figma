@@ -33,7 +33,7 @@ jobs:
         run: npm run build
 
       - name: Build Windows installer
-        run: npm run dist:win
+        run: npm run dist:win -- --publish never
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -52,7 +52,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install native dependencies
@@ -65,7 +65,7 @@ jobs:
         run: npm run build
 
       - name: Build Mac DMG
-        run: npm run dist:mac
+        run: npm run dist:mac -- --publish never
 
       - name: Upload Mac artifact
         uses: actions/upload-artifact@v4

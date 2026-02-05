@@ -583,6 +583,14 @@ export class PsdParser {
       if (scaledLetterSpacing) {
         scaledLetterSpacing = scaledLetterSpacing * scale;
       }
+      // styleRuns에도 스케일 적용
+      if (parsedStyleRuns) {
+        parsedStyleRuns = parsedStyleRuns.map(run => ({
+          ...run,
+          fontSize: run.fontSize ? run.fontSize * scale : undefined,
+          letterSpacing: run.letterSpacing ? run.letterSpacing * scale : undefined,
+        }));
+      }
     }
 
     // 텍스트에서 Photoshop 단락 구분자(\u0003)를 줄바꿈으로 변환

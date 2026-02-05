@@ -674,14 +674,9 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
   text.characters = nodeData.text;
 
   if (nodeData.textStyle) {
-    // 텍스트 변환(스케일) 적용
-    const scaleX = nodeData.textTransform?.scaleX || 1;
-    const scaleY = nodeData.textTransform?.scaleY || 1;
-    const scale = Math.max(scaleX, scaleY); // 큰 스케일 값 사용
-
-    // fontSize에 스케일 적용
-    const scaledFontSize = nodeData.textStyle.fontSize * scale;
-    text.fontSize = Math.round(scaledFontSize * 100) / 100; // 소수점 2자리
+    // 참고: 스케일은 이미 파서에서 fontSize, lineHeight, letterSpacing에 적용됨
+    // 여기서 다시 스케일을 적용하면 이중 스케일링 문제 발생
+    text.fontSize = Math.round(nodeData.textStyle.fontSize * 100) / 100; // 소수점 2자리
 
     if (nodeData.textStyle.color) {
       const { r, g, b } = nodeData.textStyle.color;
@@ -692,15 +687,14 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
     }
 
     if (nodeData.textStyle.letterSpacing) {
-      // letterSpacing도 스케일 적용
-      text.letterSpacing = { value: nodeData.textStyle.letterSpacing * scale, unit: 'PIXELS' };
+      text.letterSpacing = { value: nodeData.textStyle.letterSpacing, unit: 'PIXELS' };
     }
 
     // lineHeight는 여러 줄 텍스트에만 적용
     // 한 줄 텍스트에 큰 lineHeight를 적용하면 위치가 틀어짐
     const isMultiLine = nodeData.text?.includes('\n');
     if (nodeData.textStyle.lineHeight && isMultiLine) {
-      text.lineHeight = { value: nodeData.textStyle.lineHeight * scale, unit: 'PIXELS' };
+      text.lineHeight = { value: nodeData.textStyle.lineHeight, unit: 'PIXELS' };
     }
   }
 

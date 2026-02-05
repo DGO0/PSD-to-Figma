@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 앱 정보
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   // 경로 유틸리티 (IPC를 통해 main process에서 처리)
   getDirname: (filePath: string) => ipcRenderer.invoke('get-dirname', filePath),
   joinPath: (...paths: string[]) => ipcRenderer.invoke('join-path', ...paths),

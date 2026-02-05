@@ -83,6 +83,11 @@ app.on('activate', () => {
 
 // IPC 핸들러들
 
+// 앱 버전 정보
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
 // 경로 유틸리티
 ipcMain.handle('get-dirname', (_event, filePath: string) => {
   return path.dirname(filePath);

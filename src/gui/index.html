@@ -38,8 +38,14 @@
 
     .subtitle {
       color: #94a3b8;
-      margin-bottom: 32px;
+      margin-bottom: 8px;
       font-size: 14px;
+    }
+
+    .version {
+      color: #64748b;
+      font-size: 12px;
+      margin-bottom: 24px;
     }
 
     .card {
@@ -602,6 +608,7 @@
       <div>
         <h1>PSD/PSB to Figma</h1>
         <p class="subtitle">포토샵 파일(PSD/PSB)을 Figma로 변환합니다. 레이어 구조가 유지됩니다.</p>
+        <p class="version" id="appVersion"></p>
       </div>
     </div>
 
@@ -707,6 +714,12 @@
     let outputDir = null;
     let psdData = null;
     let convertedJsonPath = null;
+
+    // 앱 버전 표시
+    (async () => {
+      const version = await window.electronAPI.getAppVersion();
+      document.getElementById('appVersion').textContent = `v${version}`;
+    })();
 
     // 요소들
     const fileDrop = document.getElementById('fileDrop');

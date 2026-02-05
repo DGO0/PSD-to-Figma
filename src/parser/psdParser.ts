@@ -1225,11 +1225,21 @@ export class PsdParser {
 
     if (vectorMask.paths) {
       result.paths = vectorMask.paths.map((p: any) => {
-        const path: any = { type: 'path' };
+        const path: any = {
+          type: 'path',
+          closed: !p.open,
+        };
         if (p.knots) {
+          // knot.points = [beforeX, beforeY, anchorX, anchorY, afterX, afterY]
+          // 앵커 포인트는 인덱스 2, 3
           path.points = p.knots.map((k: any) => ({
-            x: k.points?.[0] ?? k.x ?? 0,
-            y: k.points?.[1] ?? k.y ?? 0,
+            x: k.points?.[2] ?? k.points?.[0] ?? k.x ?? 0,
+            y: k.points?.[3] ?? k.points?.[1] ?? k.y ?? 0,
+            // 베지어 컨트롤 포인트 (선택적)
+            beforeX: k.points?.[0],
+            beforeY: k.points?.[1],
+            afterX: k.points?.[4],
+            afterY: k.points?.[5],
           }));
         }
         return path;

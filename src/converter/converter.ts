@@ -483,6 +483,7 @@ export class PsdToFigmaConverter {
     if (layer.vectorMask) {
       baseNode.vectorMask = {
         enabled: layer.vectorMask.enabled,
+        pathData: this.convertPathsToSvg(layer.vectorMask.paths, layer.bounds),
       };
     }
 
@@ -842,6 +843,82 @@ export class PsdToFigmaConverter {
 
       return result;
     });
+  }
+
+  // 벡터 경로를 SVG path 데이터로 변환
+  private convertPathsToSvg(
+    paths: { type: string; closed?: boolean; points?: { x: number; y: number; beforeX?: number; beforeY?: number; afterX?: number; afterY?: number }[] }[] | undefined,
+    bounds: { left: number; top: number; width: number; height: number }
+  ): string | undefined {
+    if (!paths || paths.length === 0) return undefined;
+
+    const svgPaths: string[] = [];
+
+    for (const path of paths) {
+      if (!path.points || path.points.length === 0) continue;
+
+      const commands: string[] = [];
+      const points = path.points;
+
+      for (let i = 0; i < points.length; i++) {
+        const pt = points[i];
+        // 좌표를 레이어 로컬 좌표로 변환
+        const x = pt.x - bounds.left;
+        const y = pt.y - bounds.top;
+
+        if (i === 0) {
+          commands.push(`M ${x.toFixed(2)} ${y.toFixed(2)}`);
+        } else {
+          const prevPt = points[i - 1];
+          const prevAfterX = (prevPt.afterX ?? prevPt.x) - bounds.left;
+          const prevAfterY = (prevPt.afterY ?? prevPt.y) - bounds.top;
+          const currBeforeX = (pt.beforeX ?? pt.x) - bounds.left;
+          const currBeforeY = (pt.beforeY ?? pt.y) - bounds.top;
+
+          // 직선인지 곡선인지 확인
+          const isStraight =
+            Math.abs(prevAfterX - (prevPt.x - bounds.left)) < 0.01 &&
+            Math.abs(prevAfterY - (prevPt.y - bounds.top)) < 0.01 &&
+            Math.abs(currBeforeX - x) < 0.01 &&
+            Math.abs(currBeforeY - y) < 0.01;
+
+          if (isStraight) {
+            commands.push(`L ${x.toFixed(2)} ${y.toFixed(2)}`);
+          } else {
+            commands.push(`C ${prevAfterX.toFixed(2)} ${prevAfterY.toFixed(2)} ${currBeforeX.toFixed(2)} ${currBeforeY.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)}`);
+          }
+        }
+      }
+
+      // 닫힌 경로인 경우
+      if (path.closed !== false && points.length > 2) {
+        const firstPt = points[0];
+        const lastPt = points[points.length - 1];
+        const x = firstPt.x - bounds.left;
+        const y = firstPt.y - bounds.top;
+
+        const lastAfterX = (lastPt.afterX ?? lastPt.x) - bounds.left;
+        const lastAfterY = (lastPt.afterY ?? lastPt.y) - bounds.top;
+        const firstBeforeX = (firstPt.beforeX ?? firstPt.x) - bounds.left;
+        const firstBeforeY = (firstPt.beforeY ?? firstPt.y) - bounds.top;
+
+        const isStraight =
+          Math.abs(lastAfterX - (lastPt.x - bounds.left)) < 0.01 &&
+          Math.abs(lastAfterY - (lastPt.y - bounds.top)) < 0.01 &&
+          Math.abs(firstBeforeX - x) < 0.01 &&
+          Math.abs(firstBeforeY - y) < 0.01;
+
+        if (isStraight) {
+          commands.push('Z');
+        } else {
+          commands.push(`C ${lastAfterX.toFixed(2)} ${lastAfterY.toFixed(2)} ${firstBeforeX.toFixed(2)} ${firstBeforeY.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} Z`);
+        }
+      }
+
+      svgPaths.push(commands.join(' '));
+    }
+
+    return svgPaths.join(' ');
   }
 
   // 벡터 스트로크 변환

@@ -57,7 +57,16 @@ export interface VectorMask {
 
 export interface VectorPath {
   type: 'rect' | 'ellipse' | 'polygon' | 'path';
-  points?: { x: number; y: number }[];
+  closed?: boolean;
+  points?: {
+    x: number;
+    y: number;
+    // 베지어 컨트롤 포인트 (선택적)
+    beforeX?: number;
+    beforeY?: number;
+    afterX?: number;
+    afterY?: number;
+  }[];
   // rect/ellipse용
   bounds?: {
     top: number;

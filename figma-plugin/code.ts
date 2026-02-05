@@ -751,7 +751,82 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
   return text;
 }
 
-async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<RectangleNode> {
+// SVG 경로 데이터에서 벡터 노드 생성
+async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<SceneNode> {
+  const pathData = nodeData.vectorMask!.pathData!;
+  const width = Math.max(1, nodeData.width);
+  const height = Math.max(1, nodeData.height);
+
+  // 채우기 색상 결정
+  let fillColor = '#808080'; // 기본 회색
+  let fillOpacity = 1;
+
+  if (nodeData.vectorFill?.color) {
+    const c = nodeData.vectorFill.color;
+    const r = Math.round((c.r > 1 ? c.r : c.r * 255));
+    const g = Math.round((c.g > 1 ? c.g : c.g * 255));
+    const b = Math.round((c.b > 1 ? c.b : c.b * 255));
+    fillColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    fillOpacity = c.a ?? 1;
+  }
+
+  // 테두리 색상
+  let strokeAttr = '';
+  if (nodeData.vectorStroke) {
+    const sc = nodeData.vectorStroke.color;
+    const sr = Math.round((sc.r > 1 ? sc.r : sc.r * 255));
+    const sg = Math.round((sc.g > 1 ? sc.g : sc.g * 255));
+    const sb = Math.round((sc.b > 1 ? sc.b : sc.b * 255));
+    const strokeColor = `#${sr.toString(16).padStart(2, '0')}${sg.toString(16).padStart(2, '0')}${sb.toString(16).padStart(2, '0')}`;
+    strokeAttr = ` stroke="${strokeColor}" stroke-width="${nodeData.vectorStroke.width}"`;
+  }
+
+  // SVG 생성
+  const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+    <path d="${pathData}" fill="${fillColor}" fill-opacity="${fillOpacity}"${strokeAttr}/>
+  </svg>`;
+
+  try {
+    // SVG에서 노드 생성
+    const svgNode = figma.createNodeFromSvg(svg);
+    parent.appendChild(svgNode);
+
+    svgNode.x = nodeData.x;
+    svgNode.y = nodeData.y;
+    svgNode.name = nodeData.name;
+
+    // 프레임을 플래튼하여 벡터만 남기기
+    if (svgNode.children.length === 1 && svgNode.children[0].type === 'VECTOR') {
+      const vector = svgNode.children[0] as VectorNode;
+      const clonedVector = vector.clone();
+      parent.appendChild(clonedVector);
+      clonedVector.x = nodeData.x;
+      clonedVector.y = nodeData.y;
+      clonedVector.name = nodeData.name;
+      svgNode.remove();
+      return clonedVector;
+    }
+
+    return svgNode;
+  } catch (e) {
+    console.error(`Failed to create vector from path: ${nodeData.name}`, e);
+    // 실패시 사각형으로 폴백
+    const rect = figma.createRectangle();
+    parent.appendChild(rect);
+    rect.x = nodeData.x;
+    rect.y = nodeData.y;
+    rect.resize(width, height);
+    rect.name = nodeData.name + ' [Vector Failed]';
+    return rect;
+  }
+}
+
+async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<SceneNode> {
+  // 벡터 마스크에 경로 데이터가 있으면 벡터로 생성
+  if (nodeData.vectorMask?.pathData) {
+    return await createVectorFromPath(nodeData, parent);
+  }
+
   const rect = figma.createRectangle();
   parent.appendChild(rect);
 

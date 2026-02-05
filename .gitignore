@@ -31,3 +31,7 @@ analyze-features.js
 
 # Mac build artifacts
 release-mac/
+
+# Downloaded artifacts
+release-artifacts/
+release-download/

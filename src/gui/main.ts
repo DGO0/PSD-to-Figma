@@ -62,9 +62,6 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../../src/gui/index.html'));
 
-  // 개발자 도구 열기 (F12로도 열 수 있음)
-  mainWindow.webContents.openDevTools();
-
   mainWindow.on('closed', () => {
     mainWindow = null;
   });

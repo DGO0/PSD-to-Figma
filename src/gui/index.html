@@ -920,9 +920,9 @@
       outputCard.classList.remove('hidden');
       btnConvert.classList.remove('hidden');
 
-      // 기본 출력 경로 설정
-      const dir = path.substring(0, path.lastIndexOf('\\') || path.lastIndexOf('/'));
-      outputDir = dir + '/output';
+      // 기본 출력 경로 설정 (크로스 플랫폼)
+      const dir = await window.electronAPI.getDirname(path);
+      outputDir = await window.electronAPI.joinPath(dir, 'output');
       outputPath.value = outputDir;
 
       updateConvertButton();

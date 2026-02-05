@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import * as path from 'path';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 경로 유틸리티 (크로스 플랫폼)
+  getDirname: (filePath: string) => path.dirname(filePath),
+  joinPath: (...paths: string[]) => path.join(...paths),
   selectPsdFile: () => ipcRenderer.invoke('select-psd-file'),
   selectPsdFiles: () => ipcRenderer.invoke('select-psd-files'),
   selectOutputFolder: () => ipcRenderer.invoke('select-output-folder'),

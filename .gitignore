@@ -28,3 +28,6 @@ nul
 debug.bat
 gui.bat
 analyze-features.js
+
+# Mac build artifacts
+release-mac/

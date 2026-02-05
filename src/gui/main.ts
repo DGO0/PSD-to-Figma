@@ -11,8 +11,39 @@ app.commandLine.appendSwitch('js-flags', '--max-old-space-size=16384');
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {
-  // 메뉴바 제거
-  Menu.setApplicationMenu(null);
+  // Mac에서는 기본 메뉴 필요 (Cmd+Q, Cmd+C/V 등)
+  if (process.platform === 'darwin') {
+    const template: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' }
+        ]
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' }
+        ]
+      }
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  } else {
+    // Windows에서는 메뉴바 제거
+    Menu.setApplicationMenu(null);
+  }
 
   mainWindow = new BrowserWindow({
     width: 800,
@@ -112,11 +143,24 @@ ipcMain.handle('run-cli-convert', async (_event, filePath: string, outputDir: st
       cliPath = path.join(projectRoot, 'dist', 'cli', 'index.js');
     }
 
-    // Windows 터미널에서 CLI 실행
+    // 터미널에서 CLI 실행
     const isWindows = process.platform === 'win32';
-    const command = isWindows
-      ? `start cmd /k "cd /d "${projectRoot}" && node --max-old-space-size=8192 --expose-gc "${cliPath}" convert "${filePath}" -o "${outputDir}" --stream && echo. && echo 완료! Figma에서 import 하세요. && pause"`
-      : `osascript -e 'tell app "Terminal" to do script "cd \\"${projectRoot}\\" && node --max-old-space-size=8192 --expose-gc \\"${cliPath}\\" convert \\"${filePath}\\" -o \\"${outputDir}\\" --stream"'`;
+    const isMac = process.platform === 'darwin';
+
+    let command: string;
+    if (isWindows) {
+      command = `start cmd /k "cd /d "${projectRoot}" && node --max-old-space-size=8192 --expose-gc "${cliPath}" convert "${filePath}" -o "${outputDir}" --stream && echo. && echo 완료! Figma에서 import 하세요. && pause"`;
+    } else if (isMac) {
+      // Mac: 경로를 Base64로 인코딩하여 한글 문제 방지
+      const escapedProjectRoot = projectRoot.replace(/'/g, "'\\''");
+      const escapedCliPath = cliPath.replace(/'/g, "'\\''");
+      const escapedFilePath = filePath.replace(/'/g, "'\\''");
+      const escapedOutputDir = outputDir.replace(/'/g, "'\\''");
+      command = `osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd '"'"'${escapedProjectRoot}'"'"' && node --max-old-space-size=8192 --expose-gc '"'"'${escapedCliPath}'"'"' convert '"'"'${escapedFilePath}'"'"' -o '"'"'${escapedOutputDir}'"'"' --stream"'`;
+    } else {
+      // Linux
+      command = `xterm -hold -e "cd '${projectRoot}' && node --max-old-space-size=8192 --expose-gc '${cliPath}' convert '${filePath}' -o '${outputDir}' --stream"`;
+    }
 
     console.log('CLI 실행:', command);
 

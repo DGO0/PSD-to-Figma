@@ -1,3 +1,6 @@
+// 레이어 색상 태그 (Photoshop 레이어 색상 라벨)
+export type LayerColor = 'none' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'violet' | 'gray';
+
 // PSD 레이어 타입 정의
 export interface PsdLayerInfo {
   name: string;
@@ -5,6 +8,8 @@ export interface PsdLayerInfo {
   visible: boolean;
   opacity: number;
   blendMode: string;
+  color?: LayerColor;  // 레이어 색상 태그
+  locked?: boolean;    // 레이어 잠금 상태
   bounds: {
     top: number;
     left: number;

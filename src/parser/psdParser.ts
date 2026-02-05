@@ -240,6 +240,20 @@ export class PsdParser {
       bounds,
     };
 
+    // 레이어 색상 태그 (Photoshop 레이어 색상 라벨)
+    const layerColor = (layer as any).color;
+    if (layerColor && layerColor !== 'none') {
+      baseInfo.color = layerColor;
+    }
+
+    // 레이어 잠금 상태
+    if ((layer as any).protected) {
+      const prot = (layer as any).protected;
+      if (prot.transparency || prot.composite || prot.position) {
+        baseInfo.locked = true;
+      }
+    }
+
     // 레이어 효과 추출
     const effects = this.parseLayerEffects(layer);
     if (effects) {

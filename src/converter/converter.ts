@@ -57,6 +57,8 @@ export interface FigmaNodeExport {
   opacity: number;
   blendMode: string;
   visible: boolean;
+  color?: string;    // 레이어 색상 태그
+  locked?: boolean;  // 레이어 잠금 상태
   children?: FigmaNodeExport[];
   // 텍스트 전용
   text?: string;
@@ -408,6 +410,16 @@ export class PsdToFigmaConverter {
       blendMode: BLEND_MODE_MAP[layer.blendMode] || 'NORMAL',
       visible: layer.visible,
     };
+
+    // 레이어 색상 태그
+    if (layer.color) {
+      baseNode.color = layer.color;
+    }
+
+    // 레이어 잠금 상태
+    if (layer.locked) {
+      baseNode.locked = true;
+    }
 
     // 효과 변환
     if (layer.effects) {

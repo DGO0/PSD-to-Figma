@@ -664,10 +664,8 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
     }
 
     if (nodeData.textStyle.letterSpacing) {
-      // letterSpacing은 em 단위 (Photoshop tracking/1000)
-      // Figma PERCENT = em * 100 (예: -0.04 em = -4%)
-      const letterSpacingPercent = nodeData.textStyle.letterSpacing * 100;
-      text.letterSpacing = { value: letterSpacingPercent, unit: 'PERCENT' };
+      // letterSpacing 값을 그대로 픽셀로 사용 (Photoshop과 Figma 렌더링 차이 고려)
+      text.letterSpacing = { value: nodeData.textStyle.letterSpacing, unit: 'PIXELS' };
     }
 
     // lineHeight는 여러 줄 텍스트에만 적용

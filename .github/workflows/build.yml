@@ -36,7 +36,7 @@ jobs:
         run: npm run build
 
       - name: Build Windows installer
-        run: npm run dist:win
+        run: npm run dist:win -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -69,12 +69,12 @@ jobs:
         run: npm run build
 
       - name: Build Mac DMG (Intel)
-        run: npm run dist:mac -- --x64
+        run: npm run dist:mac -- --x64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Mac DMG (Apple Silicon)
-        run: npm run dist:mac -- --arm64
+        run: npm run dist:mac -- --arm64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -744,6 +744,14 @@ export class PsdParser {
     }
   }
 
+  // NaN과 undefined를 안전하게 처리하는 헬퍼 함수
+  private safeNumber(value: any, defaultValue: number): number {
+    if (typeof value === 'number' && !Number.isNaN(value)) {
+      return value;
+    }
+    return defaultValue;
+  }
+
   // 레이어 효과 추출
   private parseLayerEffects(layer: Layer): LayerEffects | undefined {
     const effects = (layer as any).effects;
@@ -760,11 +768,11 @@ export class PsdParser {
         .map((ds: any) => ({
           enabled: true,
           color: this.parseEffectColor(ds.color),
-          opacity: (ds.opacity ?? 100) / 100,
-          angle: ds.angle ?? 120,
-          distance: ds.distance ?? 5,
-          blur: ds.blur ?? 5,
-          spread: ds.spread ?? 0,
+          opacity: this.safeNumber(ds.opacity, 100) / 100,
+          angle: this.safeNumber(ds.angle, 120),
+          distance: this.safeNumber(ds.distance, 5),
+          blur: this.safeNumber(ds.blur, 5),
+          spread: this.safeNumber(ds.spread, 0),
         }));
       if (parsedShadows.length === 1) {
         result.dropShadow = parsedShadows[0];
@@ -782,11 +790,11 @@ export class PsdParser {
         .map((is: any) => ({
           enabled: true,
           color: this.parseEffectColor(is.color),
-          opacity: (is.opacity ?? 100) / 100,
-          angle: is.angle ?? 120,
-          distance: is.distance ?? 5,
-          blur: is.blur ?? 5,
-          spread: is.spread ?? 0,
+          opacity: this.safeNumber(is.opacity, 100) / 100,
+          angle: this.safeNumber(is.angle, 120),
+          distance: this.safeNumber(is.distance, 5),
+          blur: this.safeNumber(is.blur, 5),
+          spread: this.safeNumber(is.spread, 0),
         }));
       if (parsedShadows.length === 1) {
         result.innerShadow = parsedShadows[0];

@@ -619,20 +619,25 @@ export class PsdToFigmaConverter {
     if (effects.dropShadow) {
       const shadows = Array.isArray(effects.dropShadow) ? effects.dropShadow : [effects.dropShadow];
       const converted = shadows.filter(ds => ds.enabled).map(ds => {
-        const angleRad = (ds.angle * Math.PI) / 180;
+        // NaN 체크 포함한 안전한 값 추출
+        const angle = (typeof ds.angle === 'number' && !Number.isNaN(ds.angle)) ? ds.angle : 120;
+        const distance = (typeof ds.distance === 'number' && !Number.isNaN(ds.distance)) ? ds.distance : 0;
+        const angleRad = (angle * Math.PI) / 180;
+        const offsetX = Math.cos(angleRad) * distance;
+        const offsetY = Math.sin(angleRad) * distance;
         return {
           color: {
-            r: ds.color.r / 255,
-            g: ds.color.g / 255,
-            b: ds.color.b / 255,
-            a: ds.opacity,
+            r: (ds.color?.r ?? 0) / 255,
+            g: (ds.color?.g ?? 0) / 255,
+            b: (ds.color?.b ?? 0) / 255,
+            a: ds.opacity ?? 0.75,
           },
           offset: {
-            x: Math.cos(angleRad) * ds.distance,
-            y: Math.sin(angleRad) * ds.distance,
+            x: Number.isNaN(offsetX) ? 0 : offsetX,
+            y: Number.isNaN(offsetY) ? 0 : offsetY,
           },
-          blur: ds.blur,
-          spread: ds.spread,
+          blur: ds.blur ?? 0,
+          spread: ds.spread ?? 0,
         };
       });
       if (converted.length === 1) {
@@ -646,20 +651,25 @@ export class PsdToFigmaConverter {
     if (effects.innerShadow) {
       const shadows = Array.isArray(effects.innerShadow) ? effects.innerShadow : [effects.innerShadow];
       const converted = shadows.filter(is => is.enabled).map(is => {
-        const angleRad = (is.angle * Math.PI) / 180;
+        // NaN 체크 포함한 안전한 값 추출
+        const angle = (typeof is.angle === 'number' && !Number.isNaN(is.angle)) ? is.angle : 120;
+        const distance = (typeof is.distance === 'number' && !Number.isNaN(is.distance)) ? is.distance : 0;
+        const angleRad = (angle * Math.PI) / 180;
+        const offsetX = Math.cos(angleRad) * distance;
+        const offsetY = Math.sin(angleRad) * distance;
         return {
           color: {
-            r: is.color.r / 255,
-            g: is.color.g / 255,
-            b: is.color.b / 255,
-            a: is.opacity,
+            r: (is.color?.r ?? 0) / 255,
+            g: (is.color?.g ?? 0) / 255,
+            b: (is.color?.b ?? 0) / 255,
+            a: is.opacity ?? 0.75,
           },
           offset: {
-            x: Math.cos(angleRad) * is.distance,
-            y: Math.sin(angleRad) * is.distance,
+            x: Number.isNaN(offsetX) ? 0 : offsetX,
+            y: Number.isNaN(offsetY) ? 0 : offsetY,
           },
-          blur: is.blur,
-          spread: is.spread,
+          blur: is.blur ?? 0,
+          spread: is.spread ?? 0,
         };
       });
       if (converted.length === 1) {

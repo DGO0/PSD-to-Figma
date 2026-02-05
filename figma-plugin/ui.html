@@ -355,9 +355,10 @@
         return;
       }
 
-      // 이미지 파일들 찾기
+      // 이미지 파일들 찾기 (Windows/Mac 경로 모두 지원)
       const imageFiles = files.filter(f =>
-        f.name.endsWith('.png') && f.webkitRelativePath.includes('/images/')
+        f.name.endsWith('.png') &&
+        (f.webkitRelativePath.includes('/images/') || f.webkitRelativePath.includes('\\images\\'))
       );
 
       isProcessing = true;

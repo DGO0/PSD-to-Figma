@@ -33,6 +33,15 @@ interface FigmaNodeExport {
     letterSpacing?: number;
     textAlign?: 'left' | 'center' | 'right' | 'justify';
   };
+  // 멀티스타일 텍스트 런
+  styleRuns?: {
+    text: string;
+    fontSize?: number;
+    fontFamily?: string;
+    fontStyle?: string;
+    color?: { r: number; g: number; b: number; a: number };
+    letterSpacing?: number;
+  }[];
   // 텍스트 변환 (스케일, 회전, 이동)
   textTransform?: {
     scaleX?: number;
@@ -375,73 +384,21 @@ async function createNodeBase(nodeData: FigmaNodeExport, parent: FrameNode | Gro
 }
 
 // 레이어 마스크가 적용된 노드 생성
-async function createMaskedNode(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<FrameNode | null> {
-  const mask = nodeData.mask!;
-
-  // 마스크 프레임 생성
-  const maskFrame = figma.createFrame();
-  parent.appendChild(maskFrame);
-
-  maskFrame.name = `${nodeData.name} [Masked]`;
-  maskFrame.x = nodeData.x;
-  maskFrame.y = nodeData.y;
-  maskFrame.resize(Math.max(1, nodeData.width), Math.max(1, nodeData.height));
-  maskFrame.clipsContent = true;
-  maskFrame.fills = []; // 배경 투명
-
-  // 마스크 이미지/모양 생성
-  if (mask.imageFileName || mask.imageData) {
-    const maskRect = figma.createRectangle();
-    maskFrame.appendChild(maskRect);
-
-    maskRect.name = 'Mask';
-    maskRect.x = mask.bounds.x - nodeData.x;
-    maskRect.y = mask.bounds.y - nodeData.y;
-    maskRect.resize(Math.max(1, mask.bounds.width), Math.max(1, mask.bounds.height));
-
-    // 마스크 이미지 적용 (안전하게)
-    let maskImageData: Uint8Array | null = null;
-
-    if (mask.imageData) {
-      maskImageData = safeBase64Decode(mask.imageData);
-    } else if (mask.imageFileName) {
-      maskImageData = imageStore.get(mask.imageFileName) || null;
-    }
-
-    if (maskImageData) {
-      try {
-        const maskImage = figma.createImage(maskImageData);
-        maskRect.fills = [{
-          type: 'IMAGE',
-          imageHash: maskImage.hash,
-          scaleMode: 'FILL'
-        }];
-      } catch (e) {
-        maskRect.fills = [{
-          type: 'SOLID',
-          color: { r: 1, g: 1, b: 1 }
-        }];
-      }
-    } else {
-      maskRect.fills = [{
-        type: 'SOLID',
-        color: { r: 1, g: 1, b: 1 }
-      }];
-    }
-
-    maskRect.isMask = true;
-  }
-
-  // 원본 콘텐츠 생성 (마스크 없이)
+// 참고: Figma의 마스크는 포토샵 레이어 마스크와 다르게 작동함
+// 포토샵: 마스크 이미지의 밝기로 투명도 결정
+// Figma: 마스크 형태로 클리핑
+// 현재는 마스크를 건너뛰고 콘텐츠만 표시 (마스크는 수동 적용 필요)
+async function createMaskedNode(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<SceneNode | null> {
+  // 마스크 없이 콘텐츠만 생성
   const contentNodeData = { ...nodeData, mask: undefined };
-  const contentNode = await createNodeBase(contentNodeData, maskFrame);
+  const contentNode = await createNodeBase(contentNodeData, parent);
 
   if (contentNode) {
-    contentNode.x = 0;
-    contentNode.y = 0;
+    // 레이어 이름에 마스크 표시 추가
+    contentNode.name = `${nodeData.name} [has mask]`;
   }
 
-  return maskFrame;
+  return contentNode;
 }
 
 async function createGroup(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<GroupNode | FrameNode | null> {
@@ -687,7 +644,10 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
     }
 
     if (nodeData.textStyle.letterSpacing) {
-      text.letterSpacing = { value: nodeData.textStyle.letterSpacing, unit: 'PIXELS' };
+      // letterSpacing은 em 단위 (Photoshop tracking/1000)
+      // Figma PERCENT = em * 100 (예: -0.04 em = -4%)
+      const letterSpacingPercent = nodeData.textStyle.letterSpacing * 100;
+      text.letterSpacing = { value: letterSpacingPercent, unit: 'PERCENT' };
     }
 
     // lineHeight는 여러 줄 텍스트에만 적용
@@ -695,6 +655,36 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
     const isMultiLine = nodeData.text?.includes('\n');
     if (nodeData.textStyle.lineHeight && isMultiLine) {
       text.lineHeight = { value: nodeData.textStyle.lineHeight, unit: 'PIXELS' };
+    }
+  }
+
+  // styleRuns 처리 (멀티스타일 텍스트)
+  if (nodeData.styleRuns && nodeData.styleRuns.length > 0) {
+    let currentPos = 0;
+    for (const run of nodeData.styleRuns) {
+      const runLength = run.text.length;
+      const startPos = currentPos;
+      const endPos = currentPos + runLength;
+
+      // 색상 적용
+      if (run.color && startPos < text.characters.length) {
+        const actualEnd = Math.min(endPos, text.characters.length);
+        const r = run.color.r > 1 ? run.color.r / 255 : run.color.r;
+        const g = run.color.g > 1 ? run.color.g / 255 : run.color.g;
+        const b = run.color.b > 1 ? run.color.b / 255 : run.color.b;
+        text.setRangeFills(startPos, actualEnd, [{
+          type: 'SOLID',
+          color: { r, g, b }
+        }]);
+      }
+
+      // 폰트 크기 적용 (다른 폰트 크기가 있는 경우)
+      if (run.fontSize && startPos < text.characters.length) {
+        const actualEnd = Math.min(endPos, text.characters.length);
+        text.setRangeFontSize(startPos, actualEnd, Math.round(run.fontSize * 100) / 100);
+      }
+
+      currentPos = endPos;
     }
   }
 
@@ -709,26 +699,25 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
   text.textAlignHorizontal = alignMap[textAlign] || 'LEFT';
 
   // 텍스트 박스 크기 및 자동 조절 설정
-  const hasScale = (nodeData.textTransform?.scaleX && nodeData.textTransform.scaleX !== 1) ||
-                   (nodeData.textTransform?.scaleY && nodeData.textTransform.scaleY !== 1);
-  const isSingleLine = !nodeData.text.includes('\n');
-  const isNonLeftAlign = textAlign === 'center' || textAlign === 'right';
-
-  // 원본 PSD 박스 크기
   const originalWidth = nodeData.width;
   const originalHeight = nodeData.height;
+  const lineHeight = nodeData.textStyle?.lineHeight || nodeData.textStyle?.fontSize || 16;
+  const explicitLineCount = (nodeData.text.match(/\n/g) || []).length + 1;
 
-  if (isNonLeftAlign && originalWidth > 0) {
-    // 중앙/오른쪽 정렬: 원본 박스 크기 유지 (정렬이 제대로 동작하도록)
+  // 원본 PSD에서 렌더링된 라인 수 추정
+  // height / lineHeight로 대략적인 라인 수 계산
+  const estimatedRenderedLines = originalHeight / lineHeight;
+
+  // 명시적 줄바꿈보다 렌더링 라인이 많으면 자동 줄바꿈이 있었음
+  const hasAutoWrap = estimatedRenderedLines > explicitLineCount + 0.3;
+
+  if (hasAutoWrap) {
+    // 자동 줄바꿈 필요 - 고정 너비 사용 (폰트 차이 보정을 위해 5% 여유)
     text.textAutoResize = 'HEIGHT';
-    text.resize(Math.max(1, originalWidth), Math.max(1, originalHeight || 100));
-  } else if (hasScale || isSingleLine) {
-    // 스케일 적용 또는 한 줄 왼쪽 정렬: 자동 크기
+    text.resize(Math.ceil(originalWidth * 1.05), originalHeight);
+  } else {
+    // 자동 줄바꿈 불필요 - 명시적 \n만 줄바꿈
     text.textAutoResize = 'WIDTH_AND_HEIGHT';
-  } else if (originalWidth > 0) {
-    // 여러 줄 왼쪽 정렬: 너비 고정
-    text.textAutoResize = 'HEIGHT';
-    text.resize(Math.max(1, originalWidth), Math.max(1, originalHeight || 100));
   }
 
   // 위치 설정
@@ -751,18 +740,23 @@ async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode
   const width = Math.max(1, nodeData.width);
   const height = Math.max(1, nodeData.height);
 
-  // 채우기 색상 결정
-  let fillColor = '#808080'; // 기본 회색
+  // Figma 채우기 색상 결정 (0-1 범위)
+  let fillR = 0.5, fillG = 0.5, fillB = 0.5; // 기본 회색
   let fillOpacity = 1;
 
   if (nodeData.vectorFill?.color) {
     const c = nodeData.vectorFill.color;
-    const r = Math.round((c.r > 1 ? c.r : c.r * 255));
-    const g = Math.round((c.g > 1 ? c.g : c.g * 255));
-    const b = Math.round((c.b > 1 ? c.b : c.b * 255));
-    fillColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    fillR = c.r > 1 ? c.r / 255 : c.r;
+    fillG = c.g > 1 ? c.g / 255 : c.g;
+    fillB = c.b > 1 ? c.b / 255 : c.b;
     fillOpacity = c.a ?? 1;
   }
+
+  // SVG용 색상 (0-255 범위)
+  const svgR = Math.round(fillR * 255);
+  const svgG = Math.round(fillG * 255);
+  const svgB = Math.round(fillB * 255);
+  const fillColor = `#${svgR.toString(16).padStart(2, '0')}${svgG.toString(16).padStart(2, '0')}${svgB.toString(16).padStart(2, '0')}`;
 
   // 테두리 색상
   let strokeAttr = '';
@@ -775,10 +769,8 @@ async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode
     strokeAttr = ` stroke="${strokeColor}" stroke-width="${nodeData.vectorStroke.width}"`;
   }
 
-  // SVG 생성
-  const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-    <path d="${pathData}" fill="${fillColor}" fill-opacity="${fillOpacity}"${strokeAttr}/>
-  </svg>`;
+  // SVG 생성 (단일 라인)
+  const svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg"><path d="${pathData}" fill="${fillColor}" fill-opacity="${fillOpacity}"${strokeAttr}/></svg>`;
 
   try {
     // SVG에서 노드 생성
@@ -789,6 +781,13 @@ async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode
     svgNode.y = nodeData.y;
     svgNode.name = nodeData.name;
 
+    // Figma 채우기 설정 (0-1 범위)
+    const figmaFill: SolidPaint = {
+      type: 'SOLID',
+      color: { r: fillR, g: fillG, b: fillB },
+      opacity: fillOpacity
+    };
+
     // 프레임을 플래튼하여 벡터만 남기기
     if (svgNode.children.length === 1 && svgNode.children[0].type === 'VECTOR') {
       const vector = svgNode.children[0] as VectorNode;
@@ -797,20 +796,34 @@ async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode
       clonedVector.x = nodeData.x;
       clonedVector.y = nodeData.y;
       clonedVector.name = nodeData.name;
+      // 채우기 명시적 설정
+      clonedVector.fills = [figmaFill];
       svgNode.remove();
       return clonedVector;
+    }
+
+    // 프레임 내부의 벡터들에도 채우기 적용
+    for (const child of svgNode.children) {
+      if (child.type === 'VECTOR') {
+        (child as VectorNode).fills = [figmaFill];
+      }
     }
 
     return svgNode;
   } catch (e) {
     console.error(`Failed to create vector from path: ${nodeData.name}`, e);
-    // 실패시 사각형으로 폴백
+    // 실패시 사각형으로 폴백 - 채우기 적용
     const rect = figma.createRectangle();
     parent.appendChild(rect);
     rect.x = nodeData.x;
     rect.y = nodeData.y;
     rect.resize(width, height);
     rect.name = nodeData.name + ' [Vector Failed]';
+    rect.fills = [{
+      type: 'SOLID',
+      color: { r: fillR, g: fillG, b: fillB },
+      opacity: fillOpacity
+    }];
     return rect;
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "psd-to-figma",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Convert PSD files to Figma with layer preservation",
   "main": "dist/gui/main.js",
   "bin": {
@@ -66,7 +66,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": null
@@ -75,7 +77,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.developer-tools",
@@ -99,7 +104,10 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerLanguages": ["ko", "en"],
+      "installerLanguages": [
+        "ko",
+        "en"
+      ],
       "language": "1042"
     },
     "asar": true,

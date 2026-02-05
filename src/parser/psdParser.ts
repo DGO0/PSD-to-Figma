@@ -569,18 +569,34 @@ export class PsdParser {
       fontSize = 16;
     }
 
+    // 텍스트 변환 스케일 적용 (폰트 크기, 행간에 스케일 적용)
+    let scaledFontSize = fontSize;
+    let scaledLineHeight = style.leading;
+    let scaledLetterSpacing = style.tracking ? style.tracking / 1000 : undefined;
+
+    if (transform && (transform.scaleX || transform.scaleY)) {
+      const scale = transform.scaleX || transform.scaleY || 1;
+      scaledFontSize = fontSize * scale;
+      if (scaledLineHeight) {
+        scaledLineHeight = scaledLineHeight * scale;
+      }
+      if (scaledLetterSpacing) {
+        scaledLetterSpacing = scaledLetterSpacing * scale;
+      }
+    }
+
     // 텍스트에서 Photoshop 단락 구분자(\u0003)를 줄바꿈으로 변환
     let text = textInfo.text || '';
     text = text.replace(/\u0003/g, '\n');
 
     return {
       text,
-      fontSize,
+      fontSize: scaledFontSize,
       fontFamily,
       fontStyle,
       color,
-      lineHeight: style.leading,
-      letterSpacing: style.tracking ? style.tracking / 1000 : undefined,
+      lineHeight: scaledLineHeight,
+      letterSpacing: scaledLetterSpacing,
       textAlign,
       underline: underline || undefined,
       strikethrough: strikethrough || undefined,

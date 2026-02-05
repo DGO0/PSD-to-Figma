@@ -754,7 +754,9 @@
         const file = files[0];
         const ext = file.name.toLowerCase();
         if (ext.endsWith('.psd') || ext.endsWith('.psb')) {
-          await selectFile(file.path);
+          // Electron의 webUtils API로 파일 경로 가져오기
+          const filePath = window.electronAPI.getPathForFile(file);
+          await selectFile(filePath);
         } else {
           alert('PSD 또는 PSB 파일만 지원합니다.');
         }

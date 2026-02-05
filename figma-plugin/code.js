@@ -414,7 +414,7 @@ async function loadFontWithFallback(family, style) {
     return DEFAULT_FALLBACK_FONT;
 }
 async function createText(nodeData, parent) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e;
     if (!nodeData.text) {
         return null;
     }
@@ -495,32 +495,17 @@ async function createText(nodeData, parent) {
         'justify': 'JUSTIFIED'
     };
     text.textAlignHorizontal = alignMap[textAlign] || 'LEFT';
-    // 텍스트 박스 크기 및 자동 조절 설정
-    const originalWidth = nodeData.width;
-    const originalHeight = nodeData.height;
-    const lineHeight = ((_e = nodeData.textStyle) === null || _e === void 0 ? void 0 : _e.lineHeight) || ((_f = nodeData.textStyle) === null || _f === void 0 ? void 0 : _f.fontSize) || 16;
-    const explicitLineCount = (nodeData.text.match(/\n/g) || []).length + 1;
-    // 원본 PSD에서 렌더링된 라인 수 추정
-    // height / lineHeight로 대략적인 라인 수 계산
-    const estimatedRenderedLines = originalHeight / lineHeight;
-    // 명시적 줄바꿈보다 렌더링 라인이 많으면 자동 줄바꿈이 있었음
-    const hasAutoWrap = estimatedRenderedLines > explicitLineCount + 0.3;
-    if (hasAutoWrap) {
-        // 자동 줄바꿈 필요 - 고정 너비 사용 (폰트 차이 보정을 위해 5% 여유)
-        text.textAutoResize = 'HEIGHT';
-        text.resize(Math.ceil(originalWidth * 1.05), originalHeight);
-    }
-    else {
-        // 자동 줄바꿈 불필요 - 명시적 \n만 줄바꿈
-        text.textAutoResize = 'WIDTH_AND_HEIGHT';
-    }
+    // 텍스트 자동 크기 조절
+    // 모든 텍스트에 자동 크기 적용 (명시적 \n만 줄바꿈)
+    // 고정 너비 사용시 폰트 렌더링 차이로 줄바꿈 문제 발생
+    text.textAutoResize = 'WIDTH_AND_HEIGHT';
     // 위치 설정
     // PSD bounds (nodeData.x, nodeData.y)를 기본으로 사용
     // bounds는 렌더링된 텍스트의 실제 바운딩 박스 위치
     text.x = nodeData.x;
     text.y = nodeData.y;
     // 회전 적용
-    if ((_g = nodeData.textTransform) === null || _g === void 0 ? void 0 : _g.rotation) {
+    if ((_e = nodeData.textTransform) === null || _e === void 0 ? void 0 : _e.rotation) {
         text.rotation = -nodeData.textTransform.rotation; // Figma는 반시계방향이 양수
     }
     return text;

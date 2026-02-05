@@ -718,27 +718,10 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
   };
   text.textAlignHorizontal = alignMap[textAlign] || 'LEFT';
 
-  // 텍스트 박스 크기 및 자동 조절 설정
-  const originalWidth = nodeData.width;
-  const originalHeight = nodeData.height;
-  const lineHeight = nodeData.textStyle?.lineHeight || nodeData.textStyle?.fontSize || 16;
-  const explicitLineCount = (nodeData.text.match(/\n/g) || []).length + 1;
-
-  // 원본 PSD에서 렌더링된 라인 수 추정
-  // height / lineHeight로 대략적인 라인 수 계산
-  const estimatedRenderedLines = originalHeight / lineHeight;
-
-  // 명시적 줄바꿈보다 렌더링 라인이 많으면 자동 줄바꿈이 있었음
-  const hasAutoWrap = estimatedRenderedLines > explicitLineCount + 0.3;
-
-  if (hasAutoWrap) {
-    // 자동 줄바꿈 필요 - 고정 너비 사용 (폰트 차이 보정을 위해 5% 여유)
-    text.textAutoResize = 'HEIGHT';
-    text.resize(Math.ceil(originalWidth * 1.05), originalHeight);
-  } else {
-    // 자동 줄바꿈 불필요 - 명시적 \n만 줄바꿈
-    text.textAutoResize = 'WIDTH_AND_HEIGHT';
-  }
+  // 텍스트 자동 크기 조절
+  // 모든 텍스트에 자동 크기 적용 (명시적 \n만 줄바꿈)
+  // 고정 너비 사용시 폰트 렌더링 차이로 줄바꿈 문제 발생
+  text.textAutoResize = 'WIDTH_AND_HEIGHT';
 
   // 위치 설정
   // PSD bounds (nodeData.x, nodeData.y)를 기본으로 사용

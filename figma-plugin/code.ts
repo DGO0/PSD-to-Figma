@@ -60,6 +60,7 @@ interface FigmaNodeExport {
     imageFileName?: string;
     imageData?: string; // base64 encoded PNG
     bounds: { x: number; y: number; width: number; height: number };
+    defaultColor?: number; // 0=outside hidden, 255=outside visible
   };
   // 벡터 마스크
   vectorMask?: {
@@ -285,38 +286,69 @@ async function createClippingGroup(
   clippingNodes: FigmaNodeExport[],
   parent: FrameNode | GroupNode
 ) {
+  // 클리핑 영역 계산: 베이스 노드 bounds를 기준으로 하되,
+  // vectorMask가 있으면 그 경로가 실제 클리핑 영역이므로 베이스 bounds 사용
+  var clipX = baseNode.x;
+  var clipY = baseNode.y;
+  var clipW = baseNode.width;
+  var clipH = baseNode.height;
+
+  // 클리핑 노드들의 union bounds 계산 (프레임 크기 결정)
+  var unionRight = clipX + clipW;
+  var unionBottom = clipY + clipH;
+  for (var ci = 0; ci < clippingNodes.length; ci++) {
+    var cn = clippingNodes[ci];
+    var cnRight = cn.x + cn.width;
+    var cnBottom = cn.y + cn.height;
+    if (cnRight > unionRight) unionRight = cnRight;
+    if (cnBottom > unionBottom) unionBottom = cnBottom;
+  }
+
+  // 프레임 크기는 union bounds 사용 (클리핑 콘텐츠가 잘리지 않도록)
+  var frameW = Math.max(clipW, unionRight - clipX);
+  var frameH = Math.max(clipH, unionBottom - clipY);
+
   // 클리핑 그룹용 프레임 생성
-  const clipFrame = figma.createFrame();
+  var clipFrame = figma.createFrame();
   parent.appendChild(clipFrame);
 
-  clipFrame.name = `${baseNode.name} [Clipping Group]`;
-  clipFrame.x = baseNode.x;
-  clipFrame.y = baseNode.y;
-  clipFrame.resize(Math.max(1, baseNode.width), Math.max(1, baseNode.height));
+  clipFrame.name = baseNode.name + ' [Clipping Group]';
+  clipFrame.x = clipX;
+  clipFrame.y = clipY;
+  clipFrame.resize(Math.max(1, frameW), Math.max(1, frameH));
   clipFrame.clipsContent = true;
   clipFrame.fills = []; // 배경 투명
 
   // 베이스 노드 생성 (마스크로 설정)
-  const baseCreated = await createNodeInFrame(baseNode, clipFrame, 0, 0);
+  var baseCreated = await createNodeInFrame(baseNode, clipFrame, 0, 0);
   if (baseCreated && 'isMask' in baseCreated) {
     // 먼저 채우기 정보 저장
-    const savedFills = 'fills' in baseCreated ? [...(baseCreated as GeometryMixin).fills as Paint[]] : [];
+    var savedFills: Paint[] = [];
+    if ('fills' in baseCreated) {
+      var existingFills = (baseCreated as GeometryMixin).fills;
+      if (existingFills && Array.isArray(existingFills)) {
+        for (var fi = 0; fi < existingFills.length; fi++) {
+          savedFills.push(existingFills[fi]);
+        }
+      }
+    }
 
     // 마스크 설정
-    (baseCreated as unknown as { isMask: boolean }).isMask = true;
+    (baseCreated as any).isMask = true;
 
     // 채우기 복원 (마스크 설정으로 인해 사라질 수 있음)
     if (savedFills.length > 0 && 'fills' in baseCreated) {
       (baseCreated as GeometryMixin).fills = savedFills;
     }
 
-    console.log(`Clipping mask created: ${baseNode.name}, fills: ${savedFills.length}`);
+    console.log('Clipping mask created: ' + baseNode.name + ', fills: ' + savedFills.length);
   }
 
   // 클리핑된 노드들 생성
-  for (const clipNode of clippingNodes) {
-    const offsetX = clipNode.x - baseNode.x;
-    const offsetY = clipNode.y - baseNode.y;
+  for (var cj = 0; cj < clippingNodes.length; cj++) {
+    var clipNode = clippingNodes[cj];
+    var offsetX = clipNode.x - clipX;
+    var offsetY = clipNode.y - clipY;
     await createNodeInFrame(clipNode, clipFrame, offsetX, offsetY);
   }
 }
@@ -404,21 +436,62 @@ async function createNodeBase(nodeData: FigmaNodeExport, parent: FrameNode | Gro
 }
 
 // 레이어 마스크가 적용된 노드 생성
-// 참고: Figma의 마스크는 포토샵 레이어 마스크와 다르게 작동함
-// 포토샵: 마스크 이미지의 밝기로 투명도 결정
-// Figma: 마스크 형태로 클리핑
-// 현재는 마스크를 건너뛰고 콘텐츠만 표시 (마스크는 수동 적용 필요)
+// PSD 마스크: defaultColor=0 → 마스크 밖은 숨김 (클리핑), defaultColor=255 → 마스크 밖은 표시
 async function createMaskedNode(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<SceneNode | null> {
-  // 마스크 없이 콘텐츠만 생성
-  const contentNodeData = { ...nodeData, mask: undefined };
-  const contentNode = await createNodeBase(contentNodeData, parent);
+  var mask = nodeData.mask;
+  if (!mask) return null;
 
-  if (contentNode) {
-    // 레이어 이름에 마스크 표시 추가
-    contentNode.name = `${nodeData.name} [has mask]`;
+  var defaultColor = mask.defaultColor != null ? mask.defaultColor : 0;
+
+  // defaultColor=255: 마스크 밖 영역이 보이므로 레이어 전체 bounds 사용 (클리핑 불필요)
+  if (defaultColor === 255) {
+    var contentNodeData2 = {};
+    for (var k in nodeData) {
+      (contentNodeData2 as any)[k] = (nodeData as any)[k];
+    }
+    (contentNodeData2 as any).mask = undefined;
+    var contentNode2 = await createNodeBase(contentNodeData2 as FigmaNodeExport, parent);
+    return contentNode2;
   }
 
-  return contentNode;
+  // defaultColor=0: 마스크 bounds로 클리핑
+  var maskBounds = mask.bounds;
+  if (maskBounds.width <= 0 || maskBounds.height <= 0) {
+    // 마스크 bounds가 유효하지 않으면 콘텐츠만 생성
+    var contentNodeData3 = {};
+    for (var k2 in nodeData) {
+      (contentNodeData3 as any)[k2] = (nodeData as any)[k2];
+    }
+    (contentNodeData3 as any).mask = undefined;
+    return await createNodeBase(contentNodeData3 as FigmaNodeExport, parent);
+  }
+
+  // 마스크 프레임 생성 (클리핑 영역)
+  var maskFrame = figma.createFrame();
+  parent.appendChild(maskFrame);
+
+  maskFrame.name = nodeData.name;
+  maskFrame.x = maskBounds.x;
+  maskFrame.y = maskBounds.y;
+  maskFrame.resize(Math.max(1, maskBounds.width), Math.max(1, maskBounds.height));
+  maskFrame.clipsContent = true;
+  maskFrame.fills = []; // 배경 투명
+
+  // 콘텐츠 노드를 프레임 안에 생성 (마스크 제거)
+  var contentNodeData = {};
+  for (var k3 in nodeData) {
+    (contentNodeData as any)[k3] = (nodeData as any)[k3];
+  }
+  (contentNodeData as any).mask = undefined;
+  var contentNode = await createNodeBase(contentNodeData as FigmaNodeExport, maskFrame);
+
+  if (contentNode) {
+    // 마스크 프레임 기준으로 상대 좌표 설정
+    contentNode.x = nodeData.x - maskBounds.x;
+    contentNode.y = nodeData.y - maskBounds.y;
+  }
+
+  return maskFrame;
 }
 
 async function createGroup(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<GroupNode | FrameNode | null> {
@@ -831,8 +904,32 @@ async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode
 
 async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<SceneNode> {
   // 벡터 마스크에 경로 데이터가 있으면 벡터로 생성
-  if (nodeData.vectorMask?.pathData) {
-    return await createVectorFromPath(nodeData, parent);
+  if (nodeData.vectorMask && nodeData.vectorMask.pathData) {
+    const vectorNode = await createVectorFromPath(nodeData, parent);
+
+    // effects의 solidFill (Color Overlay)로 채우기 덮어쓰기
+    if (nodeData.effects && nodeData.effects.solidFill && 'fills' in vectorNode) {
+      const sf = nodeData.effects.solidFill;
+      const c = sf.color;
+      const r = c.r > 1 ? c.r / 255 : c.r;
+      const g = c.g > 1 ? c.g / 255 : c.g;
+      const b = c.b > 1 ? c.b / 255 : c.b;
+      (vectorNode as GeometryMixin).fills = [{
+        type: 'SOLID',
+        color: { r, g, b },
+        opacity: c.a
+      }];
+    }
+
+    // effects의 gradientOverlay로 채우기 덮어쓰기
+    if (nodeData.effects && nodeData.effects.gradientOverlay && 'fills' in vectorNode) {
+      (vectorNode as GeometryMixin).fills = [createGradientFill(nodeData.effects.gradientOverlay)];
+    }
+
+    // 그림자/글로우 등 효과 적용
+    applyEffects(vectorNode as SceneNode & BlendMixin, nodeData.effects);
+
+    return vectorNode;
   }
 
   const rect = figma.createRectangle();
@@ -918,19 +1015,12 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
       rect.fills = fills;
       console.log(`Applied fill to: ${nodeData.name}, fills: ${fills.length}`);
     } else if (nodeData.imageFileName) {
-      // 이미지 파일명은 있지만 데이터가 없는 경우
+      // 이미지 파일명은 있지만 데이터가 없는 경우 - 투명 처리
       console.log(`No image data for: ${nodeData.name}, imageFileName: ${nodeData.imageFileName}`);
-      rect.fills = [{
-        type: 'SOLID',
-        color: { r: 0.9, g: 0.9, b: 0.9 }
-      }];
-      rect.name = `[IMG] ${nodeData.name}`;
+      rect.fills = [];
     } else {
-      // 기본 플레이스홀더
-      rect.fills = [{
-        type: 'SOLID',
-        color: { r: 0.8, g: 0.8, b: 0.8 }
-      }];
+      // fill/image 없는 레이어 - 투명 처리
+      rect.fills = [];
     }
   }
 

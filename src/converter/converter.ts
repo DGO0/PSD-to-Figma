@@ -117,6 +117,7 @@ export interface FigmaMask {
   enabled: boolean;
   imageFileName?: string;
   bounds: { x: number; y: number; width: number; height: number };
+  defaultColor?: number; // 0=outside hidden, 255=outside visible
 }
 
 export interface FigmaVectorMask {
@@ -476,6 +477,7 @@ export class PsdToFigmaConverter {
           width: layer.mask.bounds.right - layer.mask.bounds.left,
           height: layer.mask.bounds.bottom - layer.mask.bounds.top,
         },
+        defaultColor: layer.mask.defaultColor,
       };
     }
 

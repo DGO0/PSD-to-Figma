@@ -905,18 +905,51 @@ async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode
 async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | GroupNode): Promise<SceneNode> {
   // 벡터 마스크에 경로 데이터가 있으면 벡터로 생성
   if (nodeData.vectorMask && nodeData.vectorMask.pathData) {
-    const vectorNode = await createVectorFromPath(nodeData, parent);
+    // 이미지가 있으면 이미지를 우선 사용 (PSD 렌더링 결과가 가장 정확)
+    var vecImageData: Uint8Array | null = null;
+    if (nodeData.imageFileName) {
+      vecImageData = imageStore.get(nodeData.imageFileName) || null;
+    }
+    if (!vecImageData && nodeData.imageData) {
+      vecImageData = safeBase64Decode(nodeData.imageData);
+    }
+
+    if (vecImageData) {
+      // 이미지가 있으면: 벡터 경로 모양 + 이미지 fill 조합
+      try {
+        var vecImg = figma.createImage(vecImageData);
+        var vecRect = figma.createRectangle();
+        parent.appendChild(vecRect);
+        vecRect.x = nodeData.x;
+        vecRect.y = nodeData.y;
+        vecRect.resize(Math.max(1, nodeData.width), Math.max(1, nodeData.height));
+        vecRect.fills = [{
+          type: 'IMAGE',
+          imageHash: vecImg.hash,
+          scaleMode: 'FILL'
+        }];
+        // 그림자/글로우 등 효과 적용
+        applyEffects(vecRect, nodeData.effects);
+        return vecRect;
+      } catch (e) {
+        // 이미지 로드 실패시 벡터 경로 폴백
+        console.log('Vector image load failed, using path: ' + nodeData.name);
+      }
+    }
+
+    // 이미지가 없으면 벡터 경로 + fill color 사용
+    var vectorNode = await createVectorFromPath(nodeData, parent);
 
     // effects의 solidFill (Color Overlay)로 채우기 덮어쓰기
     if (nodeData.effects && nodeData.effects.solidFill && 'fills' in vectorNode) {
-      const sf = nodeData.effects.solidFill;
-      const c = sf.color;
-      const r = c.r > 1 ? c.r / 255 : c.r;
-      const g = c.g > 1 ? c.g / 255 : c.g;
-      const b = c.b > 1 ? c.b / 255 : c.b;
+      var sf = nodeData.effects.solidFill;
+      var c = sf.color;
+      var r2 = c.r > 1 ? c.r / 255 : c.r;
+      var g2 = c.g > 1 ? c.g / 255 : c.g;
+      var b2 = c.b > 1 ? c.b / 255 : c.b;
       (vectorNode as GeometryMixin).fills = [{
         type: 'SOLID',
-        color: { r, g, b },
+        color: { r: r2, g: g2, b: b2 },
         opacity: c.a
       }];
     }

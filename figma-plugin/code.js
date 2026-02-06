@@ -593,16 +593,42 @@
       async function createRectangle(nodeData, parent) {
         var _a, _b, _c;
         if (nodeData.vectorMask && nodeData.vectorMask.pathData) {
-          const vectorNode = await createVectorFromPath(nodeData, parent);
+          var vecImageData = null;
+          if (nodeData.imageFileName) {
+            vecImageData = imageStore.get(nodeData.imageFileName) || null;
+          }
+          if (!vecImageData && nodeData.imageData) {
+            vecImageData = safeBase64Decode(nodeData.imageData);
+          }
+          if (vecImageData) {
+            try {
+              var vecImg = figma.createImage(vecImageData);
+              var vecRect = figma.createRectangle();
+              parent.appendChild(vecRect);
+              vecRect.x = nodeData.x;
+              vecRect.y = nodeData.y;
+              vecRect.resize(Math.max(1, nodeData.width), Math.max(1, nodeData.height));
+              vecRect.fills = [{
+                type: "IMAGE",
+                imageHash: vecImg.hash,
+                scaleMode: "FILL"
+              }];
+              applyEffects(vecRect, nodeData.effects);
+              return vecRect;
+            } catch (e) {
+              console.log("Vector image load failed, using path: " + nodeData.name);
+            }
+          }
+          var vectorNode = await createVectorFromPath(nodeData, parent);
           if (nodeData.effects && nodeData.effects.solidFill && "fills" in vectorNode) {
-            const sf = nodeData.effects.solidFill;
-            const c = sf.color;
-            const r = c.r > 1 ? c.r / 255 : c.r;
-            const g = c.g > 1 ? c.g / 255 : c.g;
-            const b = c.b > 1 ? c.b / 255 : c.b;
+            var sf = nodeData.effects.solidFill;
+            var c = sf.color;
+            var r2 = c.r > 1 ? c.r / 255 : c.r;
+            var g2 = c.g > 1 ? c.g / 255 : c.g;
+            var b2 = c.b > 1 ? c.b / 255 : c.b;
             vectorNode.fills = [{
               type: "SOLID",
-              color: { r, g, b },
+              color: { r: r2, g: g2, b: b2 },
               opacity: c.a
             }];
           }
@@ -645,14 +671,14 @@
           const fills = [];
           if (nodeData.vectorFill) {
             if (nodeData.vectorFill.type === "solid" && nodeData.vectorFill.color) {
-              const c = nodeData.vectorFill.color;
-              const r = c.r > 1 ? c.r / 255 : c.r;
-              const g = c.g > 1 ? c.g / 255 : c.g;
-              const b = c.b > 1 ? c.b / 255 : c.b;
+              const c2 = nodeData.vectorFill.color;
+              const r = c2.r > 1 ? c2.r / 255 : c2.r;
+              const g = c2.g > 1 ? c2.g / 255 : c2.g;
+              const b = c2.b > 1 ? c2.b / 255 : c2.b;
               fills.push({
                 type: "SOLID",
                 color: { r, g, b },
-                opacity: c.a
+                opacity: c2.a
               });
             } else if (nodeData.vectorFill.type === "gradient" && nodeData.vectorFill.gradient) {
               const grad = nodeData.vectorFill.gradient;
@@ -660,15 +686,15 @@
             }
           }
           if ((_a = nodeData.effects) == null ? void 0 : _a.solidFill) {
-            const sf = nodeData.effects.solidFill;
-            const c = sf.color;
-            const r = c.r > 1 ? c.r / 255 : c.r;
-            const g = c.g > 1 ? c.g / 255 : c.g;
-            const b = c.b > 1 ? c.b / 255 : c.b;
+            const sf2 = nodeData.effects.solidFill;
+            const c2 = sf2.color;
+            const r = c2.r > 1 ? c2.r / 255 : c2.r;
+            const g = c2.g > 1 ? c2.g / 255 : c2.g;
+            const b = c2.b > 1 ? c2.b / 255 : c2.b;
             fills.push({
               type: "SOLID",
               color: { r, g, b },
-              opacity: c.a
+              opacity: c2.a
             });
           }
           if ((_b = nodeData.effects) == null ? void 0 : _b.gradientOverlay) {

@@ -574,13 +574,29 @@ export class PsdToFigmaConverter {
 
       // 파싱 중 스트리밍으로 이미 저장된 경우 확인
       const imageDataStr = layer.imageData.toString('utf8');
+      let imageFileName: string;
       if (imageDataStr.startsWith('__STREAMED__:')) {
-        // 이미 파싱 중에 파일로 저장됨, 파일명만 사용
-        baseNode.imageFileName = imageDataStr.replace('__STREAMED__:', '');
+        imageFileName = imageDataStr.replace('__STREAMED__:', '');
       } else {
-        // 일반적인 경우: 새 파일명 생성 및 저장
-        const imageFileName = `${this.sanitizeFileName(layer.name)}_${this.imageCounter++}.png`;
+        imageFileName = `${this.sanitizeFileName(layer.name)}_${this.imageCounter++}.png`;
         this.writeImageImmediately(imageFileName, layer.imageData);
+      }
+
+      // 대형 이미지 타일링 체크 (4096px 초과시 분할)
+      const MAX_TILE_DIM = 4096;
+      const needsTiling = baseNode.width > MAX_TILE_DIM || baseNode.height > MAX_TILE_DIM;
+
+      if (needsTiling && this.imagesDir) {
+        const tiles = this.splitImageIntoTiles(imageFileName, baseNode, MAX_TILE_DIM);
+        if (tiles && tiles.length > 0) {
+          // 타일 그룹으로 변환: children에 타일 노드들 추가
+          baseNode.type = 'GROUP';
+          baseNode.children = tiles;
+          console.log(`  Tiled large image: ${layer.name} (${baseNode.width}x${baseNode.height}) → ${tiles.length} tiles`);
+        } else {
+          baseNode.imageFileName = imageFileName;
+        }
+      } else {
         baseNode.imageFileName = imageFileName;
       }
     }
@@ -591,6 +607,73 @@ export class PsdToFigmaConverter {
     }
 
     return baseNode;
+  }
+
+  private splitImageIntoTiles(imageFileName: string, node: FigmaNodeExport, maxDim: number): FigmaNodeExport[] | null {
+    if (!this.imagesDir) return null;
+
+    const imagePath = path.join(this.imagesDir, imageFileName);
+    if (!fs.existsSync(imagePath)) return null;
+
+    try {
+      const { createCanvas, loadImage } = require('canvas');
+      const imgBuf = fs.readFileSync(imagePath);
+      // PNG header로 dimensions 읽기
+      if (imgBuf.length < 24 || imgBuf[0] !== 0x89 || imgBuf[1] !== 0x50) return null;
+      const imgWidth = imgBuf.readUInt32BE(16);
+      const imgHeight = imgBuf.readUInt32BE(20);
+
+      if (imgWidth <= maxDim && imgHeight <= maxDim) return null;
+
+      // canvas로 이미지 로드 (동기적으로 처리하기 위해 deasync 대신 직접 canvas 사용)
+      const fullCanvas = createCanvas(imgWidth, imgHeight);
+      const fullCtx = fullCanvas.getContext('2d');
+
+      // PNG 디코딩을 위해 canvas의 Image 사용
+      const img = new (require('canvas').Image)();
+      img.src = imgBuf;
+      fullCtx.drawImage(img, 0, 0);
+
+      const tiles: FigmaNodeExport[] = [];
+      const rows = Math.ceil(imgHeight / maxDim);
+      const cols = Math.ceil(imgWidth / maxDim);
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const tileX = col * maxDim;
+          const tileY = row * maxDim;
+          const tileW = Math.min(maxDim, imgWidth - tileX);
+          const tileH = Math.min(maxDim, imgHeight - tileY);
+
+          const tileCanvas = createCanvas(tileW, tileH);
+          const tileCtx = tileCanvas.getContext('2d');
+          tileCtx.drawImage(fullCanvas, tileX, tileY, tileW, tileH, 0, 0, tileW, tileH);
+
+          const tileName = `tile_${this.imageCounter++}_r${row}_c${col}.png`;
+          const tileBuf = tileCanvas.toBuffer('image/png');
+          this.writeImageImmediately(tileName, tileBuf);
+
+          tiles.push({
+            id: `tile_${node.id}_${row}_${col}`,
+            name: `${node.name} [tile ${row},${col}]`,
+            type: 'RECTANGLE',
+            x: tileX,
+            y: tileY,
+            width: tileW,
+            height: tileH,
+            opacity: 1,
+            blendMode: 'NORMAL',
+            visible: true,
+            imageFileName: tileName,
+          });
+        }
+      }
+
+      return tiles;
+    } catch (e: any) {
+      console.warn(`  Image tiling failed: ${imageFileName} - ${e.message}`);
+      return null;
+    }
   }
 
   private mapLayerType(type: PsdLayerInfo['type']): string {

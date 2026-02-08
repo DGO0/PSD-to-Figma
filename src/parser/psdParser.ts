@@ -813,8 +813,9 @@ export class PsdParser {
     }
 
     // 아우터 글로우
-    if (effects.outerGlow && effects.outerGlow.enabled !== false) {
-      const og = effects.outerGlow;
+    const ogRaw = Array.isArray(effects.outerGlow) ? effects.outerGlow[0] : effects.outerGlow;
+    if (ogRaw && ogRaw.enabled !== false) {
+      const og = ogRaw;
       result.outerGlow = {
         enabled: true,
         color: this.parseEffectColor(og.color),
@@ -826,8 +827,9 @@ export class PsdParser {
     }
 
     // 이너 글로우
-    if (effects.innerGlow && effects.innerGlow.enabled !== false) {
-      const ig = effects.innerGlow;
+    const igRaw = Array.isArray(effects.innerGlow) ? effects.innerGlow[0] : effects.innerGlow;
+    if (igRaw && igRaw.enabled !== false) {
+      const ig = igRaw;
       result.innerGlow = {
         enabled: true,
         color: this.parseEffectColor(ig.color),
@@ -876,8 +878,9 @@ export class PsdParser {
     }
 
     // Bevel & Emboss
-    if (effects.bevelEmboss && effects.bevelEmboss.enabled !== false) {
-      const be = effects.bevelEmboss;
+    const beRaw = Array.isArray(effects.bevelEmboss) ? effects.bevelEmboss[0] : effects.bevelEmboss;
+    if (beRaw && beRaw.enabled !== false) {
+      const be = beRaw;
       result.bevelEmboss = {
         enabled: true,
         style: be.style || 'inner-bevel',
@@ -901,8 +904,9 @@ export class PsdParser {
     // Gaussian Blur (레이어 블러)
     const layerAny = (effects as any);
     if (layerAny.blur || layerAny.gaussianBlur) {
-      const blur = layerAny.blur || layerAny.gaussianBlur;
-      if (blur.enabled !== false) {
+      const blurRaw = layerAny.blur || layerAny.gaussianBlur;
+      const blur = Array.isArray(blurRaw) ? blurRaw[0] : blurRaw;
+      if (blur && blur.enabled !== false) {
         result.gaussianBlur = {
           enabled: true,
           radius: blur.radius ?? blur.size ?? 5,
@@ -912,8 +916,9 @@ export class PsdParser {
     }
 
     // Solid Fill (색상 오버레이)
-    if (effects.solidFill && effects.solidFill.enabled !== false) {
-      const sf = effects.solidFill;
+    const sfRaw = Array.isArray(effects.solidFill) ? effects.solidFill[0] : effects.solidFill;
+    if (sfRaw && sfRaw.enabled !== false) {
+      const sf = sfRaw;
       result.solidFill = {
         enabled: true,
         color: this.parseEffectColor(sf.color),
@@ -924,8 +929,9 @@ export class PsdParser {
     }
 
     // Gradient Overlay (그라디언트 오버레이)
-    if (effects.gradientOverlay && effects.gradientOverlay.enabled !== false) {
-      const go = effects.gradientOverlay;
+    const goRaw = Array.isArray(effects.gradientOverlay) ? effects.gradientOverlay[0] : effects.gradientOverlay;
+    if (goRaw && goRaw.enabled !== false) {
+      const go = goRaw;
       result.gradientOverlay = {
         enabled: true,
         opacity: (go.opacity ?? 100) / 100,
@@ -940,8 +946,9 @@ export class PsdParser {
     }
 
     // Satin (새틴 효과)
-    if (effects.satin && effects.satin.enabled !== false) {
-      const sa = effects.satin;
+    const saRaw = Array.isArray(effects.satin) ? effects.satin[0] : effects.satin;
+    if (saRaw && saRaw.enabled !== false) {
+      const sa = saRaw;
       result.satin = {
         enabled: true,
         color: this.parseEffectColor(sa.color),
@@ -956,8 +963,9 @@ export class PsdParser {
     }
 
     // Pattern Overlay (패턴 오버레이)
-    if (effects.patternOverlay && effects.patternOverlay.enabled !== false) {
-      const po = effects.patternOverlay;
+    const poRaw = Array.isArray(effects.patternOverlay) ? effects.patternOverlay[0] : effects.patternOverlay;
+    if (poRaw && poRaw.enabled !== false) {
+      const po = poRaw;
       const patternId = po.pattern?.id;
       result.patternOverlay = {
         enabled: true,

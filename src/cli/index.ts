@@ -55,6 +55,17 @@ async function main() {
         const useStreaming = options.stream === true;
         if (useStreaming) {
           console.log(chalk.cyan('  Streaming mode enabled - images will be written to disk during parsing'));
+          // 이전 변환의 잔여 이미지 파일 정리 (재변환 시 파일 중복 방지)
+          const imagesDir = path.join(outputDir, 'images');
+          if (fs.existsSync(imagesDir)) {
+            const oldFiles = fs.readdirSync(imagesDir);
+            if (oldFiles.length > 0) {
+              for (const f of oldFiles) {
+                fs.unlinkSync(path.join(imagesDir, f));
+              }
+              console.log(chalk.gray(`  Cleaned ${oldFiles.length} old images from previous conversion`));
+            }
+          }
         }
         const parser = new PsdParser(absolutePath, {
           streamImages: useStreaming,

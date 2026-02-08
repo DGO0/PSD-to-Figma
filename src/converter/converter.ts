@@ -202,6 +202,9 @@ export interface FigmaEffects {
     angle: number;
     stops: { position: number; color: { r: number; g: number; b: number; a: number } }[];
     blendMode: string;
+    opacity?: number;
+    scale?: number;
+    reverse?: boolean;
   };
   // Satin
   satin?: {
@@ -916,6 +919,9 @@ export class PsdToFigmaConverter {
           },
         })),
         blendMode: BLEND_MODE_MAP[go.blendMode] || 'NORMAL',
+        opacity: go.opacity,
+        scale: go.scale,
+        reverse: go.reverse,
       };
     }
 

@@ -24,9 +24,9 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
 
-  // code.ts
+  // figma-plugin/code.ts
   var require_code = __commonJS({
-    "code.ts"() {
+    "figma-plugin/code.ts"() {
       var imageStore = /* @__PURE__ */ new Map();
       function safeBase64Decode(data) {
         if (typeof data === "string" && data.length > 0) {
@@ -150,6 +150,36 @@
         var baseCreated = await createNodeInFrame(baseNode, clipFrame, 0, 0);
         if (baseCreated) {
           console.log("Clipping base created: " + baseNode.name);
+        }
+        if (baseNode.vectorMask && baseNode.vectorMask.pathData && clippingNodes.length > 0) {
+          try {
+            var maskPathData = baseNode.vectorMask.pathData;
+            var maskSvg = '<svg width="' + clipW + '" height="' + clipH + '" viewBox="0 0 ' + clipW + " " + clipH + '" xmlns="http://www.w3.org/2000/svg"><path d="' + maskPathData + '" fill="white"/></svg>';
+            var maskSvgNode = figma.createNodeFromSvg(maskSvg);
+            clipFrame.appendChild(maskSvgNode);
+            if (maskSvgNode.children.length === 1 && maskSvgNode.children[0].type === "VECTOR") {
+              var maskVec = maskSvgNode.children[0];
+              var clonedMask = maskVec.clone();
+              clipFrame.appendChild(clonedMask);
+              clonedMask.x = 0;
+              clonedMask.y = 0;
+              clonedMask.name = baseNode.name + " [Clip Mask]";
+              clonedMask.fills = [{ type: "SOLID", color: { r: 1, g: 1, b: 1 }, opacity: 1 }];
+              clonedMask.isMask = true;
+              maskSvgNode.remove();
+              console.log("Clip mask vector created for: " + baseNode.name);
+            } else {
+              maskSvgNode.x = 0;
+              maskSvgNode.y = 0;
+              maskSvgNode.name = baseNode.name + " [Clip Mask]";
+              var flattenedMask = figma.flatten([maskSvgNode]);
+              flattenedMask.fills = [{ type: "SOLID", color: { r: 1, g: 1, b: 1 }, opacity: 1 }];
+              flattenedMask.isMask = true;
+              console.log("Clip mask flattened for: " + baseNode.name);
+            }
+          } catch (e) {
+            console.log("Failed to create clip mask vector: " + e);
+          }
         }
         for (var cj = 0; cj < clippingNodes.length; cj++) {
           var clipNode = clippingNodes[cj];
@@ -600,38 +630,43 @@
             vecImageData = safeBase64Decode(nodeData.imageData);
           }
           if (vecImageData) {
+            var createdVecNode = null;
             try {
-              var vecImg = figma.createImage(vecImageData);
-              var vecRect = figma.createRectangle();
-              parent.appendChild(vecRect);
-              vecRect.x = nodeData.x;
-              vecRect.y = nodeData.y;
-              vecRect.resize(Math.max(1, nodeData.width), Math.max(1, nodeData.height));
-              var vecFills = [{
-                type: "IMAGE",
-                imageHash: vecImg.hash,
-                scaleMode: "FILL"
-              }];
-              if (nodeData.effects && nodeData.effects.solidFill) {
-                var sf = nodeData.effects.solidFill;
-                var c = sf.color;
-                var r2 = c.r > 1 ? c.r / 255 : c.r;
-                var g2 = c.g > 1 ? c.g / 255 : c.g;
-                var b2 = c.b > 1 ? c.b / 255 : c.b;
-                vecFills = [{
-                  type: "SOLID",
-                  color: { r: r2, g: g2, b: b2 },
-                  opacity: c.a
+              createdVecNode = await createVectorFromPath(nodeData, parent);
+              if ("fills" in createdVecNode) {
+                var vecImg = figma.createImage(vecImageData);
+                var vecFills = [{
+                  type: "IMAGE",
+                  imageHash: vecImg.hash,
+                  scaleMode: "FILL"
                 }];
+                if (nodeData.effects && nodeData.effects.solidFill) {
+                  var sf = nodeData.effects.solidFill;
+                  var c = sf.color;
+                  var r2 = c.r > 1 ? c.r / 255 : c.r;
+                  var g2 = c.g > 1 ? c.g / 255 : c.g;
+                  var b2 = c.b > 1 ? c.b / 255 : c.b;
+                  vecFills = [{
+                    type: "SOLID",
+                    color: { r: r2, g: g2, b: b2 },
+                    opacity: c.a
+                  }];
+                }
+                if (nodeData.effects && nodeData.effects.gradientOverlay) {
+                  vecFills = [createGradientFill(nodeData.effects.gradientOverlay)];
+                }
+                createdVecNode.fills = vecFills;
               }
-              if (nodeData.effects && nodeData.effects.gradientOverlay) {
-                vecFills = [createGradientFill(nodeData.effects.gradientOverlay)];
-              }
-              vecRect.fills = vecFills;
-              applyEffects(vecRect, nodeData.effects);
-              return vecRect;
+              applyEffects(createdVecNode, nodeData.effects);
+              return createdVecNode;
             } catch (e) {
-              console.log("Vector image load failed, using path: " + nodeData.name);
+              if (createdVecNode) {
+                try {
+                  createdVecNode.remove();
+                } catch (_e) {
+                }
+              }
+              console.log("Vector+image creation failed, using path only: " + nodeData.name);
             }
           }
           var vectorNode = await createVectorFromPath(nodeData, parent);
@@ -768,21 +803,37 @@
         return rect;
       }
       function createGradientFill(grad) {
-        const angleRad = grad.angle * Math.PI / 180;
-        const gradientStops = grad.stops.map((stop) => ({
-          position: stop.position,
-          color: { r: stop.color.r, g: stop.color.g, b: stop.color.b, a: stop.color.a }
-        }));
-        const cos = Math.cos(angleRad);
-        const sin = Math.sin(angleRad);
-        return {
+        var scaleVal = (grad.scale != null ? grad.scale : 100) / 100;
+        var reverseVal = grad.reverse || false;
+        var opacityVal = grad.opacity != null ? grad.opacity : 1;
+        var angleRad = grad.angle * Math.PI / 180;
+        var stops = grad.stops;
+        if (reverseVal) {
+          stops = stops.map(function(s) {
+            return { position: 1 - s.position, color: s.color };
+          });
+          stops = stops.slice().reverse();
+        }
+        var gradientStops = stops.map(function(stop) {
+          return {
+            position: stop.position,
+            color: { r: stop.color.r, g: stop.color.g, b: stop.color.b, a: stop.color.a }
+          };
+        });
+        var cos_s = scaleVal * Math.cos(angleRad);
+        var sin_s = scaleVal * Math.sin(angleRad);
+        var result = {
           type: "GRADIENT_LINEAR",
           gradientStops,
           gradientTransform: [
-            [cos, sin, 0.5 - cos * 0.5 - sin * 0.5],
-            [-sin, cos, 0.5 + sin * 0.5 - cos * 0.5]
+            [cos_s, sin_s, 0.5 - cos_s * 0.5 - sin_s * 0.5],
+            [-sin_s, cos_s, 0.5 + sin_s * 0.5 - cos_s * 0.5]
           ]
         };
+        if (opacityVal < 1) {
+          result.opacity = opacityVal;
+        }
+        return result;
       }
       function applyEffects(node, effects) {
         var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F;

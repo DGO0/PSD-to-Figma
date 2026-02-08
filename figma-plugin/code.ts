@@ -310,11 +310,45 @@ async function createClippingGroup(
   clipFrame.fills = []; // 배경 투명
 
   // 베이스 노드 생성 (Frame의 clipsContent=true로 클리핑 처리)
-  // isMask는 사용하지 않음: isMask=true로 설정하면 베이스 노드 자체가 보이지 않게 되어
-  // 베이스 이미지/색상이 사라지는 버그가 발생함
+  // 베이스 노드 자체는 보이도록 isMask 없이 생성
   var baseCreated = await createNodeInFrame(baseNode, clipFrame, 0, 0);
   if (baseCreated) {
     console.log('Clipping base created: ' + baseNode.name);
+  }
+
+  // vectorMask가 있으면 동일 경로로 isMask 벡터 생성
+  // → 사각형 bounds 대신 실제 shape(삼각형 등)으로 클리핑 노드들을 마스킹
+  if (baseNode.vectorMask && baseNode.vectorMask.pathData && clippingNodes.length > 0) {
+    try {
+      var maskPathData = baseNode.vectorMask.pathData;
+      var maskSvg = '<svg width="' + clipW + '" height="' + clipH + '" viewBox="0 0 ' + clipW + ' ' + clipH + '" xmlns="http://www.w3.org/2000/svg"><path d="' + maskPathData + '" fill="white"/></svg>';
+      var maskSvgNode = figma.createNodeFromSvg(maskSvg);
+      clipFrame.appendChild(maskSvgNode);
+
+      if (maskSvgNode.children.length === 1 && maskSvgNode.children[0].type === 'VECTOR') {
+        var maskVec = maskSvgNode.children[0] as VectorNode;
+        var clonedMask = maskVec.clone();
+        clipFrame.appendChild(clonedMask);
+        clonedMask.x = 0;
+        clonedMask.y = 0;
+        clonedMask.name = baseNode.name + ' [Clip Mask]';
+        clonedMask.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 1 }];
+        clonedMask.isMask = true;
+        maskSvgNode.remove();
+        console.log('Clip mask vector created for: ' + baseNode.name);
+      } else {
+        // 복잡한 SVG 구조면 frame 자체를 flatten 후 마스크로 사용
+        maskSvgNode.x = 0;
+        maskSvgNode.y = 0;
+        maskSvgNode.name = baseNode.name + ' [Clip Mask]';
+        var flattenedMask = figma.flatten([maskSvgNode]);
+        flattenedMask.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 }, opacity: 1 }];
+        flattenedMask.isMask = true;
+        console.log('Clip mask flattened for: ' + baseNode.name);
+      }
+    } catch (e) {
+      console.log('Failed to create clip mask vector: ' + e);
+    }
   }
 
   // 클리핑된 노드들 생성
@@ -912,51 +946,51 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
     }
 
     if (vecImageData) {
-      // 이미지가 있으면: 벡터 경로 모양 + 이미지 fill 조합
+      // 이미지가 있으면: 벡터 경로 모양 생성 후 이미지/효과 fills 적용
+      var createdVecNode: SceneNode | null = null;
       try {
-        var vecImg = figma.createImage(vecImageData);
-        var vecRect = figma.createRectangle();
-        parent.appendChild(vecRect);
-        vecRect.x = nodeData.x;
-        vecRect.y = nodeData.y;
-        vecRect.resize(Math.max(1, nodeData.width), Math.max(1, nodeData.height));
+        createdVecNode = await createVectorFromPath(nodeData, parent);
 
-        // fills 배열 구성: 이미지 + effects 오버레이
-        var vecFills: Paint[] = [{
-          type: 'IMAGE',
-          imageHash: vecImg.hash,
-          scaleMode: 'FILL'
-        }];
-
-        // solidFill (Color Overlay) - 이미지 위에 색상 덮어쓰기
-        if (nodeData.effects && nodeData.effects.solidFill) {
-          var sf = nodeData.effects.solidFill;
-          var c = sf.color;
-          var r2 = c.r > 1 ? c.r / 255 : c.r;
-          var g2 = c.g > 1 ? c.g / 255 : c.g;
-          var b2 = c.b > 1 ? c.b / 255 : c.b;
-          // Color Overlay는 이미지를 완전히 덮으므로 이미지 대신 solid fill 사용
-          vecFills = [{
-            type: 'SOLID',
-            color: { r: r2, g: g2, b: b2 },
-            opacity: c.a
+        // fills 구성: 이미지 → solidFill → gradientOverlay 순으로 오버라이드
+        if ('fills' in createdVecNode) {
+          var vecImg = figma.createImage(vecImageData);
+          var vecFills: Paint[] = [{
+            type: 'IMAGE',
+            imageHash: vecImg.hash,
+            scaleMode: 'FILL'
           }];
-        }
 
-        // gradientOverlay - solidFill 위에 또는 이미지 위에 그라데이션
-        if (nodeData.effects && nodeData.effects.gradientOverlay) {
-          // gradientOverlay는 이전 fill을 대체
-          vecFills = [createGradientFill(nodeData.effects.gradientOverlay)];
-        }
+          // solidFill (Color Overlay) - 이미지를 완전히 덮음
+          if (nodeData.effects && nodeData.effects.solidFill) {
+            var sf = nodeData.effects.solidFill;
+            var c = sf.color;
+            var r2 = c.r > 1 ? c.r / 255 : c.r;
+            var g2 = c.g > 1 ? c.g / 255 : c.g;
+            var b2 = c.b > 1 ? c.b / 255 : c.b;
+            vecFills = [{
+              type: 'SOLID',
+              color: { r: r2, g: g2, b: b2 },
+              opacity: c.a
+            }];
+          }
 
-        vecRect.fills = vecFills;
+          // gradientOverlay - 이전 fill 대체
+          if (nodeData.effects && nodeData.effects.gradientOverlay) {
+            vecFills = [createGradientFill(nodeData.effects.gradientOverlay)];
+          }
+
+          (createdVecNode as GeometryMixin).fills = vecFills;
+        }
 
         // 그림자/글로우 등 효과 적용
-        applyEffects(vecRect, nodeData.effects);
-        return vecRect;
+        applyEffects(createdVecNode, nodeData.effects);
+        return createdVecNode;
       } catch (e) {
-        // 이미지 로드 실패시 벡터 경로 폴백
-        console.log('Vector image load failed, using path: ' + nodeData.name);
+        // 이미 생성된 벡터 노드가 있으면 제거 (핑크색 잔상 방지)
+        if (createdVecNode) {
+          try { createdVecNode.remove(); } catch (_e) {}
+        }
+        console.log('Vector+image creation failed, using path only: ' + nodeData.name);
       }
     }
 
@@ -1134,25 +1168,46 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
 }
 
 // 그라디언트 Fill 생성
-function createGradientFill(grad: { type: string; angle: number; stops: { position: number; color: { r: number; g: number; b: number; a: number } }[] }): GradientPaint {
-  const angleRad = (grad.angle * Math.PI) / 180;
-  const gradientStops: ColorStop[] = grad.stops.map(stop => ({
-    position: stop.position,
-    color: { r: stop.color.r, g: stop.color.g, b: stop.color.b, a: stop.color.a }
-  }));
+function createGradientFill(grad: { type: string; angle: number; stops: { position: number; color: { r: number; g: number; b: number; a: number } }[]; opacity?: number; scale?: number; reverse?: boolean }): GradientPaint {
+  var scaleVal = (grad.scale != null ? grad.scale : 100) / 100;
+  var reverseVal = grad.reverse || false;
+  var opacityVal = grad.opacity != null ? grad.opacity : 1;
 
-  // 그라디언트 변환 행렬 계산 (angle 기반)
-  const cos = Math.cos(angleRad);
-  const sin = Math.sin(angleRad);
+  var angleRad = (grad.angle * Math.PI) / 180;
 
-  return {
+  // reverse: 그라디언트 방향 반전
+  var stops = grad.stops;
+  if (reverseVal) {
+    stops = stops.map(function(s) { return { position: 1 - s.position, color: s.color }; });
+    stops = stops.slice().reverse();
+  }
+
+  var gradientStops: ColorStop[] = stops.map(function(stop) {
+    return {
+      position: stop.position,
+      color: { r: stop.color.r, g: stop.color.g, b: stop.color.b, a: stop.color.a }
+    };
+  });
+
+  // scale 적용: 그라디언트 크기를 scale 비율로 조정 (중앙 기준)
+  var cos_s = scaleVal * Math.cos(angleRad);
+  var sin_s = scaleVal * Math.sin(angleRad);
+
+  var result: GradientPaint = {
     type: 'GRADIENT_LINEAR',
-    gradientStops,
+    gradientStops: gradientStops,
     gradientTransform: [
-      [cos, sin, 0.5 - cos * 0.5 - sin * 0.5],
-      [-sin, cos, 0.5 + sin * 0.5 - cos * 0.5]
+      [cos_s, sin_s, 0.5 - cos_s * 0.5 - sin_s * 0.5],
+      [-sin_s, cos_s, 0.5 + sin_s * 0.5 - cos_s * 0.5]
     ]
   };
+
+  // opacity: 효과 전체 불투명도
+  if (opacityVal < 1) {
+    (result as any).opacity = opacityVal;
+  }
+
+  return result;
 }
 
 // 효과 적용 (그림자, 블러 등)

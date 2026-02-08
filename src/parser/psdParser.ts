@@ -1218,11 +1218,27 @@ export class PsdParser {
       defaultColor: mask.defaultColor ?? 255,
     };
 
-    // 마스크 이미지 데이터 추출
+    // 마스크 이미지 데이터 추출 (luminance → alpha 변환)
+    // PSD 마스크는 luminance 기반 (흰색=보임, 검정=숨김)이지만
+    // Figma 마스크는 alpha 기반이므로, luminance 값을 alpha 채널로 변환
     if (mask.canvas) {
       try {
         const canvas = mask.canvas as any;
         if (canvas.toBuffer) {
+          // luminance → alpha 변환
+          if (canvas.getContext) {
+            const maskCtx = canvas.getContext('2d');
+            const maskImgData = maskCtx.getImageData(0, 0, canvas.width, canvas.height);
+            const px = maskImgData.data;
+            for (let pi = 0; pi < px.length; pi += 4) {
+              const lum = px[pi]; // grayscale: R=G=B=luminance
+              px[pi] = 255;       // R = white
+              px[pi + 1] = 255;   // G = white
+              px[pi + 2] = 255;   // B = white
+              px[pi + 3] = lum;   // Alpha = luminance
+            }
+            maskCtx.putImageData(maskImgData, 0, 0);
+          }
           const buffer = canvas.toBuffer('image/png');
 
           // 스트리밍 모드: 즉시 파일로 쓰고 메모리 해제

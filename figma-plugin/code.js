@@ -24,9 +24,9 @@
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
 
-  // figma-plugin/code.ts
+  // code.ts
   var require_code = __commonJS({
-    "figma-plugin/code.ts"() {
+    "code.ts"() {
       var imageStore = /* @__PURE__ */ new Map();
       function safeBase64Decode(data) {
         if (typeof data === "string" && data.length > 0) {
@@ -137,17 +137,8 @@
         var clipY = baseNode.y;
         var clipW = baseNode.width;
         var clipH = baseNode.height;
-        var unionRight = clipX + clipW;
-        var unionBottom = clipY + clipH;
-        for (var ci = 0; ci < clippingNodes.length; ci++) {
-          var cn = clippingNodes[ci];
-          var cnRight = cn.x + cn.width;
-          var cnBottom = cn.y + cn.height;
-          if (cnRight > unionRight) unionRight = cnRight;
-          if (cnBottom > unionBottom) unionBottom = cnBottom;
-        }
-        var frameW = Math.max(clipW, unionRight - clipX);
-        var frameH = Math.max(clipH, unionBottom - clipY);
+        var frameW = clipW;
+        var frameH = clipH;
         var clipFrame = figma.createFrame();
         parent.appendChild(clipFrame);
         clipFrame.name = baseNode.name + " [Clipping Group]";
@@ -157,21 +148,8 @@
         clipFrame.clipsContent = true;
         clipFrame.fills = [];
         var baseCreated = await createNodeInFrame(baseNode, clipFrame, 0, 0);
-        if (baseCreated && "isMask" in baseCreated) {
-          var savedFills = [];
-          if ("fills" in baseCreated) {
-            var existingFills = baseCreated.fills;
-            if (existingFills && Array.isArray(existingFills)) {
-              for (var fi = 0; fi < existingFills.length; fi++) {
-                savedFills.push(existingFills[fi]);
-              }
-            }
-          }
-          baseCreated.isMask = true;
-          if (savedFills.length > 0 && "fills" in baseCreated) {
-            baseCreated.fills = savedFills;
-          }
-          console.log("Clipping mask created: " + baseNode.name + ", fills: " + savedFills.length);
+        if (baseCreated) {
+          console.log("Clipping base created: " + baseNode.name);
         }
         for (var cj = 0; cj < clippingNodes.length; cj++) {
           var clipNode = clippingNodes[cj];
@@ -268,6 +246,27 @@
         maskFrame.resize(Math.max(1, maskBounds.width), Math.max(1, maskBounds.height));
         maskFrame.clipsContent = true;
         maskFrame.fills = [];
+        var maskImageData = null;
+        if (mask.imageFileName) {
+          maskImageData = imageStore.get(mask.imageFileName) || null;
+        } else if (mask.imageData) {
+          maskImageData = safeBase64Decode(mask.imageData);
+        }
+        if (maskImageData) {
+          try {
+            var maskImg = figma.createImage(maskImageData);
+            var maskRect = figma.createRectangle();
+            maskFrame.appendChild(maskRect);
+            maskRect.name = "Mask";
+            maskRect.x = 0;
+            maskRect.y = 0;
+            maskRect.resize(Math.max(1, maskBounds.width), Math.max(1, maskBounds.height));
+            maskRect.fills = [{ type: "IMAGE", imageHash: maskImg.hash, scaleMode: "FILL" }];
+            maskRect.isMask = true;
+          } catch (e) {
+            console.log("Failed to create mask image: " + e);
+          }
+        }
         var contentNodeData = {};
         for (var k3 in nodeData) {
           contentNodeData[k3] = nodeData[k3];
@@ -608,11 +607,27 @@
               vecRect.x = nodeData.x;
               vecRect.y = nodeData.y;
               vecRect.resize(Math.max(1, nodeData.width), Math.max(1, nodeData.height));
-              vecRect.fills = [{
+              var vecFills = [{
                 type: "IMAGE",
                 imageHash: vecImg.hash,
                 scaleMode: "FILL"
               }];
+              if (nodeData.effects && nodeData.effects.solidFill) {
+                var sf = nodeData.effects.solidFill;
+                var c = sf.color;
+                var r2 = c.r > 1 ? c.r / 255 : c.r;
+                var g2 = c.g > 1 ? c.g / 255 : c.g;
+                var b2 = c.b > 1 ? c.b / 255 : c.b;
+                vecFills = [{
+                  type: "SOLID",
+                  color: { r: r2, g: g2, b: b2 },
+                  opacity: c.a
+                }];
+              }
+              if (nodeData.effects && nodeData.effects.gradientOverlay) {
+                vecFills = [createGradientFill(nodeData.effects.gradientOverlay)];
+              }
+              vecRect.fills = vecFills;
               applyEffects(vecRect, nodeData.effects);
               return vecRect;
             } catch (e) {
@@ -656,11 +671,27 @@
         if (imageData) {
           try {
             const image = figma.createImage(imageData);
-            rect.fills = [{
+            var imgFills = [{
               type: "IMAGE",
               imageHash: image.hash,
               scaleMode: "FILL"
             }];
+            if (nodeData.effects && nodeData.effects.solidFill) {
+              var sfImg = nodeData.effects.solidFill;
+              var cImg = sfImg.color;
+              var rImg = cImg.r > 1 ? cImg.r / 255 : cImg.r;
+              var gImg = cImg.g > 1 ? cImg.g / 255 : cImg.g;
+              var bImg = cImg.b > 1 ? cImg.b / 255 : cImg.b;
+              imgFills = [{
+                type: "SOLID",
+                color: { r: rImg, g: gImg, b: bImg },
+                opacity: cImg.a
+              }];
+            }
+            if (nodeData.effects && nodeData.effects.gradientOverlay) {
+              imgFills = [createGradientFill(nodeData.effects.gradientOverlay)];
+            }
+            rect.fills = imgFills;
             hasImage = true;
           } catch (e) {
             console.log(`Image load failed for: ${nodeData.name}`);

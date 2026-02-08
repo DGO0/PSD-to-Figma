@@ -293,20 +293,10 @@ async function createClippingGroup(
   var clipW = baseNode.width;
   var clipH = baseNode.height;
 
-  // 클리핑 노드들의 union bounds 계산 (프레임 크기 결정)
-  var unionRight = clipX + clipW;
-  var unionBottom = clipY + clipH;
-  for (var ci = 0; ci < clippingNodes.length; ci++) {
-    var cn = clippingNodes[ci];
-    var cnRight = cn.x + cn.width;
-    var cnBottom = cn.y + cn.height;
-    if (cnRight > unionRight) unionRight = cnRight;
-    if (cnBottom > unionBottom) unionBottom = cnBottom;
-  }
-
-  // 프레임 크기는 union bounds 사용 (클리핑 콘텐츠가 잘리지 않도록)
-  var frameW = Math.max(clipW, unionRight - clipX);
-  var frameH = Math.max(clipH, unionBottom - clipY);
+  // PSD 클리핑 마스크: 베이스 노드의 bounds가 클리핑 영역
+  // 클리핑된 노드들은 베이스 bounds 밖의 부분이 잘려야 함
+  var frameW = clipW;
+  var frameH = clipH;
 
   // 클리핑 그룹용 프레임 생성
   var clipFrame = figma.createFrame();
@@ -319,29 +309,12 @@ async function createClippingGroup(
   clipFrame.clipsContent = true;
   clipFrame.fills = []; // 배경 투명
 
-  // 베이스 노드 생성 (마스크로 설정)
+  // 베이스 노드 생성 (Frame의 clipsContent=true로 클리핑 처리)
+  // isMask는 사용하지 않음: isMask=true로 설정하면 베이스 노드 자체가 보이지 않게 되어
+  // 베이스 이미지/색상이 사라지는 버그가 발생함
   var baseCreated = await createNodeInFrame(baseNode, clipFrame, 0, 0);
-  if (baseCreated && 'isMask' in baseCreated) {
-    // 먼저 채우기 정보 저장
-    var savedFills: Paint[] = [];
-    if ('fills' in baseCreated) {
-      var existingFills = (baseCreated as GeometryMixin).fills;
-      if (existingFills && Array.isArray(existingFills)) {
-        for (var fi = 0; fi < existingFills.length; fi++) {
-          savedFills.push(existingFills[fi]);
-        }
-      }
-    }
-
-    // 마스크 설정
-    (baseCreated as any).isMask = true;
-
-    // 채우기 복원 (마스크 설정으로 인해 사라질 수 있음)
-    if (savedFills.length > 0 && 'fills' in baseCreated) {
-      (baseCreated as GeometryMixin).fills = savedFills;
-    }
-
-    console.log('Clipping mask created: ' + baseNode.name + ', fills: ' + savedFills.length);
+  if (baseCreated) {
+    console.log('Clipping base created: ' + baseNode.name);
   }
 
   // 클리핑된 노드들 생성
@@ -476,6 +449,30 @@ async function createMaskedNode(nodeData: FigmaNodeExport, parent: FrameNode | G
   maskFrame.resize(Math.max(1, maskBounds.width), Math.max(1, maskBounds.height));
   maskFrame.clipsContent = true;
   maskFrame.fills = []; // 배경 투명
+
+  // 마스크 이미지가 있으면 Figma 마스크로 적용 (luminance→alpha 변환됨)
+  // isMask=true 노드의 alpha 채널이 위에 있는 siblings의 가시성을 결정
+  var maskImageData: Uint8Array | null = null;
+  if (mask.imageFileName) {
+    maskImageData = imageStore.get(mask.imageFileName) || null;
+  } else if (mask.imageData) {
+    maskImageData = safeBase64Decode(mask.imageData);
+  }
+  if (maskImageData) {
+    try {
+      var maskImg = figma.createImage(maskImageData);
+      var maskRect = figma.createRectangle();
+      maskFrame.appendChild(maskRect);
+      maskRect.name = 'Mask';
+      maskRect.x = 0;
+      maskRect.y = 0;
+      maskRect.resize(Math.max(1, maskBounds.width), Math.max(1, maskBounds.height));
+      maskRect.fills = [{ type: 'IMAGE', imageHash: maskImg.hash, scaleMode: 'FILL' }];
+      maskRect.isMask = true;
+    } catch (e) {
+      console.log('Failed to create mask image: ' + e);
+    }
+  }
 
   // 콘텐츠 노드를 프레임 안에 생성 (마스크 제거)
   var contentNodeData = {};
@@ -923,11 +920,37 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
         vecRect.x = nodeData.x;
         vecRect.y = nodeData.y;
         vecRect.resize(Math.max(1, nodeData.width), Math.max(1, nodeData.height));
-        vecRect.fills = [{
+
+        // fills 배열 구성: 이미지 + effects 오버레이
+        var vecFills: Paint[] = [{
           type: 'IMAGE',
           imageHash: vecImg.hash,
           scaleMode: 'FILL'
         }];
+
+        // solidFill (Color Overlay) - 이미지 위에 색상 덮어쓰기
+        if (nodeData.effects && nodeData.effects.solidFill) {
+          var sf = nodeData.effects.solidFill;
+          var c = sf.color;
+          var r2 = c.r > 1 ? c.r / 255 : c.r;
+          var g2 = c.g > 1 ? c.g / 255 : c.g;
+          var b2 = c.b > 1 ? c.b / 255 : c.b;
+          // Color Overlay는 이미지를 완전히 덮으므로 이미지 대신 solid fill 사용
+          vecFills = [{
+            type: 'SOLID',
+            color: { r: r2, g: g2, b: b2 },
+            opacity: c.a
+          }];
+        }
+
+        // gradientOverlay - solidFill 위에 또는 이미지 위에 그라데이션
+        if (nodeData.effects && nodeData.effects.gradientOverlay) {
+          // gradientOverlay는 이전 fill을 대체
+          vecFills = [createGradientFill(nodeData.effects.gradientOverlay)];
+        }
+
+        vecRect.fills = vecFills;
+
         // 그림자/글로우 등 효과 적용
         applyEffects(vecRect, nodeData.effects);
         return vecRect;
@@ -988,11 +1011,32 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
   if (imageData) {
     try {
       const image = figma.createImage(imageData);
-      rect.fills = [{
+      var imgFills: Paint[] = [{
         type: 'IMAGE',
         imageHash: image.hash,
         scaleMode: 'FILL'
       }];
+
+      // 이미지 위에 solidFill (Color Overlay) 적용
+      if (nodeData.effects && nodeData.effects.solidFill) {
+        var sfImg = nodeData.effects.solidFill;
+        var cImg = sfImg.color;
+        var rImg = cImg.r > 1 ? cImg.r / 255 : cImg.r;
+        var gImg = cImg.g > 1 ? cImg.g / 255 : cImg.g;
+        var bImg = cImg.b > 1 ? cImg.b / 255 : cImg.b;
+        imgFills = [{
+          type: 'SOLID',
+          color: { r: rImg, g: gImg, b: bImg },
+          opacity: cImg.a
+        }];
+      }
+
+      // 이미지 위에 gradientOverlay 적용
+      if (nodeData.effects && nodeData.effects.gradientOverlay) {
+        imgFills = [createGradientFill(nodeData.effects.gradientOverlay)];
+      }
+
+      rect.fills = imgFills;
       hasImage = true;
     } catch (e) {
       console.log(`Image load failed for: ${nodeData.name}`);

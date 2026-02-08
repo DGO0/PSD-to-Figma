@@ -586,14 +586,34 @@ export class PsdToFigmaConverter {
       const MAX_TILE_DIM = 4096;
       const needsTiling = baseNode.width > MAX_TILE_DIM || baseNode.height > MAX_TILE_DIM;
 
-      if (needsTiling && this.imagesDir) {
-        const tiles = this.splitImageIntoTiles(imageFileName, baseNode, MAX_TILE_DIM);
-        if (tiles && tiles.length > 0) {
-          // 타일 그룹으로 변환: children에 타일 노드들 추가
-          baseNode.type = 'GROUP';
-          baseNode.children = tiles;
-          console.log(`  Tiled large image: ${layer.name} (${baseNode.width}x${baseNode.height}) → ${tiles.length} tiles`);
+      if (needsTiling) {
+        // imagesDir가 없으면 설정 시도 (스트리밍 모드가 아닌 경우에도 타일링 지원)
+        if (!this.imagesDir && this.options.outputDir) {
+          this.imagesDir = path.join(this.options.outputDir, 'images');
+          if (!fs.existsSync(this.imagesDir)) {
+            fs.mkdirSync(this.imagesDir, { recursive: true });
+          }
+        }
+
+        if (this.imagesDir) {
+          // 스트리밍이 아닌 경우 이미지 파일이 아직 없을 수 있으므로 직접 저장
+          const imagePath = path.join(this.imagesDir, imageFileName);
+          if (!fs.existsSync(imagePath) && layer.imageData && !imageDataStr.startsWith('__STREAMED__:')) {
+            fs.writeFileSync(imagePath, layer.imageData);
+          }
+
+          const tiles = this.splitImageIntoTiles(imageFileName, baseNode, MAX_TILE_DIM);
+          if (tiles && tiles.length > 0) {
+            // 타일 그룹으로 변환: children에 타일 노드들 추가
+            baseNode.type = 'GROUP';
+            baseNode.children = tiles;
+            console.log(`  Tiled large image: ${layer.name} (${baseNode.width}x${baseNode.height}) → ${tiles.length} tiles`);
+          } else {
+            console.warn(`  Tiling failed for: ${layer.name} (${baseNode.width}x${baseNode.height}), using single image`);
+            baseNode.imageFileName = imageFileName;
+          }
         } else {
+          console.warn(`  Cannot tile: no imagesDir set for ${layer.name}`);
           baseNode.imageFileName = imageFileName;
         }
       } else {
@@ -672,6 +692,7 @@ export class PsdToFigmaConverter {
       return tiles;
     } catch (e: any) {
       console.warn(`  Image tiling failed: ${imageFileName} - ${e.message}`);
+      console.warn(`  Stack: ${e.stack}`);
       return null;
     }
   }

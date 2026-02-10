@@ -1,6 +1,6 @@
 {
   "name": "psd-to-figma",
-  "version": "1.0.8",
+  "version": "1.0.12",
   "description": "Convert PSD files to Figma with layer preservation",
   "main": "dist/gui/main.js",
   "bin": {

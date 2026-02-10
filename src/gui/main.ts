@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell, screen } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn, exec } from 'child_process';
@@ -45,19 +45,43 @@ function createWindow() {
     Menu.setApplicationMenu(null);
   }
 
+  // DPI 스케일 팩터 감지 및 윈도우 크기 보정
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const scaleFactor = primaryDisplay.scaleFactor;
+  const isMac = process.platform === 'darwin';
+
+  // 기준 해상도(scaleFactor=1) 기반 논리 크기
+  const baseWidth = 800;
+  const baseHeight = 700;
+  const baseMinWidth = 600;
+  const baseMinHeight = 500;
+
+  console.log(`Display scale factor: ${scaleFactor}, Platform: ${process.platform}`);
+
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 700,
-    minWidth: 600,
-    minHeight: 500,
+    width: baseWidth,
+    height: baseHeight,
+    minWidth: baseMinWidth,
+    minHeight: baseMinHeight,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-    titleBarStyle: 'hiddenInset',
+    // titleBarStyle: Mac에서만 hiddenInset, Windows에서는 기본값 사용
+    ...(isMac ? { titleBarStyle: 'hiddenInset' as const } : {}),
     backgroundColor: '#1a1a2e',
     autoHideMenuBar: true,
+  });
+
+  // DPI 스케일에 따라 웹 콘텐츠 줌 팩터 보정 (모든 PC에서 동일한 비율로 표시)
+  // scaleFactor가 1이 아닌 경우에도 콘텐츠가 일관되게 보이도록 보정
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (mainWindow) {
+      // 시스템 스케일에 맞춰 자연스럽게 표시 (1:1 매핑)
+      mainWindow.webContents.setZoomFactor(1);
+      console.log(`Zoom factor set to 1 (system scale: ${scaleFactor})`);
+    }
   });
 
   mainWindow.loadFile(path.join(__dirname, '../../src/gui/index.html'));

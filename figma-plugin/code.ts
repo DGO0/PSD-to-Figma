@@ -1,6 +1,13 @@
 // Figma Plugin - PSD Import
 // 이 코드를 Figma Plugin으로 사용하세요
 
+// 만료일 체크 (2026-03-07 00:00:00 KST)
+const EXPIRY_DATE = new Date('2026-03-07T00:00:00+09:00');
+if (new Date() >= EXPIRY_DATE) {
+  figma.notify('This plugin has expired. Please contact the developer.', { error: true });
+  figma.closePlugin();
+}
+
 interface FigmaExportData {
   version: string;
   name: string;

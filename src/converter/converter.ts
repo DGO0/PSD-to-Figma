@@ -492,8 +492,8 @@ export class PsdToFigmaConverter {
       };
     }
 
-    // 벡터 스트로크
-    if (layer.vectorStroke) {
+    // 벡터 스트로크 (enabled일 때만)
+    if (layer.vectorStroke && layer.vectorStroke.enabled !== false) {
       baseNode.vectorStroke = this.convertVectorStroke(layer.vectorStroke);
     }
 

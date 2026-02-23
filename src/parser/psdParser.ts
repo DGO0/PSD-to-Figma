@@ -281,8 +281,8 @@ export class PsdParser {
       baseInfo.vectorMask = this.parseVectorMask((layer as any).vectorMask);
     }
 
-    // 벡터 스트로크
-    if ((layer as any).vectorStroke) {
+    // 벡터 스트로크 (strokeEnabled일 때만)
+    if ((layer as any).vectorStroke && (layer as any).vectorStroke.strokeEnabled !== false) {
       baseInfo.vectorStroke = this.parseVectorStroke((layer as any).vectorStroke);
     }
 
@@ -1308,9 +1308,9 @@ export class PsdParser {
   // 벡터 스트로크 파싱
   private parseVectorStroke(stroke: any): VectorStroke {
     return {
-      enabled: stroke.enabled !== false,
-      color: this.parseEffectColor(stroke.strokeColor || stroke.color),
-      width: stroke.strokeWidth ?? stroke.width ?? 1,
+      enabled: stroke.strokeEnabled !== false,
+      color: this.parseEffectColor(stroke.strokeColor || stroke.color || stroke.content?.color),
+      width: stroke.lineWidth?.value ?? stroke.strokeWidth ?? stroke.width ?? 1,
       lineAlignment: stroke.strokeStyleLineAlignment || 'center',
       lineCap: stroke.strokeStyleLineCapType || 'butt',
       lineJoin: stroke.strokeStyleLineJoinType || 'miter',

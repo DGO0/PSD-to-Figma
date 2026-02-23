@@ -241,6 +241,8 @@ async function importPsdData(data: FigmaExportData) {
   mainFrame.x = figma.viewport.center.x - data.canvas.width / 2;
   mainFrame.y = figma.viewport.center.y - data.canvas.height / 2;
   mainFrame.clipsContent = true;
+  mainFrame.fills = []; // 기본 흰색 배경 제거
+  mainFrame.strokes = []; // 기본 스트로크 제거
 
   // 클리핑 그룹을 처리하면서 노드 생성
   await createNodesWithClipping(data.nodes, mainFrame);
@@ -315,6 +317,7 @@ async function createClippingGroup(
   clipFrame.resize(Math.max(1, frameW), Math.max(1, frameH));
   clipFrame.clipsContent = true;
   clipFrame.fills = []; // 배경 투명
+  clipFrame.strokes = []; // 기본 스트로크 제거
 
   // 베이스 노드 생성 (Frame의 clipsContent=true로 클리핑 처리)
   // 베이스 노드 자체는 보이도록 isMask 없이 생성
@@ -490,6 +493,7 @@ async function createMaskedNode(nodeData: FigmaNodeExport, parent: FrameNode | G
   maskFrame.resize(Math.max(1, maskBounds.width), Math.max(1, maskBounds.height));
   maskFrame.clipsContent = true;
   maskFrame.fills = []; // 배경 투명
+  maskFrame.strokes = []; // 기본 스트로크 제거
 
   // 마스크 이미지가 있으면 Figma 마스크로 적용 (luminance→alpha 변환됨)
   // isMask=true 노드의 alpha 채널이 위에 있는 siblings의 가시성을 결정
@@ -509,6 +513,7 @@ async function createMaskedNode(nodeData: FigmaNodeExport, parent: FrameNode | G
       maskRect.y = 0;
       maskRect.resize(Math.max(1, maskBounds.width), Math.max(1, maskBounds.height));
       maskRect.fills = [{ type: 'IMAGE', imageHash: maskImg.hash, scaleMode: 'FILL' }];
+      maskRect.strokes = []; // 기본 스트로크 제거
       maskRect.isMask = true;
     } catch (e) {
       console.log('Failed to create mask image: ' + e);
@@ -551,6 +556,7 @@ async function createGroup(nodeData: FigmaNodeExport, parent: FrameNode | GroupN
     frame.resize(Math.max(1, nodeData.width), Math.max(1, nodeData.height));
     frame.clipsContent = true;
     frame.fills = []; // 배경 투명
+    frame.strokes = []; // 기본 스트로크 제거
 
     // 자식 노드 상대 좌표 계산하여 생성
     const adjustedChildren = nodeData.children.map(child => ({
@@ -910,14 +916,27 @@ async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode
       clonedVector.name = nodeData.name;
       // 채우기 명시적 설정
       clonedVector.fills = [figmaFill];
+      // 스트로크 설정 (없으면 기본 스트로크 제거)
+      if (nodeData.vectorStroke) {
+        const vs = nodeData.vectorStroke;
+        clonedVector.strokes = [{
+          type: 'SOLID',
+          color: { r: vs.color.r, g: vs.color.g, b: vs.color.b },
+          opacity: vs.color.a
+        }];
+        clonedVector.strokeWeight = vs.width;
+      } else {
+        clonedVector.strokes = [];
+      }
       svgNode.remove();
       return clonedVector;
     }
 
-    // 프레임 내부의 벡터들에도 채우기 적용
+    // 프레임 내부의 벡터들에도 채우기/스트로크 적용
     for (const child of svgNode.children) {
       if (child.type === 'VECTOR') {
         (child as VectorNode).fills = [figmaFill];
+        (child as VectorNode).strokes = []; // 기본 스트로크 제거
       }
     }
 
@@ -936,6 +955,7 @@ async function createVectorFromPath(nodeData: FigmaNodeExport, parent: FrameNode
       color: { r: fillR, g: fillG, b: fillB },
       opacity: fillOpacity
     }];
+    rect.strokes = []; // 기본 스트로크 제거
     return rect;
   }
 }
@@ -990,7 +1010,7 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
         }
 
         // 그림자/글로우 등 효과 적용
-        applyEffects(createdVecNode, nodeData.effects);
+        applyEffects(createdVecNode as SceneNode & BlendMixin, nodeData.effects);
         return createdVecNode;
       } catch (e) {
         // 이미 생성된 벡터 노드가 있으면 제거 (핑크색 잔상 방지)
@@ -1142,7 +1162,7 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
     }
   }
 
-  // vectorStroke 적용
+  // 스트로크 적용 (기본값 제거 포함)
   if (nodeData.vectorStroke) {
     const vs = nodeData.vectorStroke;
     rect.strokes = [{
@@ -1152,10 +1172,7 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
     }];
     rect.strokeWeight = vs.width;
     rect.strokeAlign = vs.alignment === 'CENTER' ? 'CENTER' : vs.alignment === 'INSIDE' ? 'INSIDE' : 'OUTSIDE';
-  }
-
-  // effects.stroke 적용
-  if (nodeData.effects?.stroke && !nodeData.vectorStroke) {
+  } else if (nodeData.effects?.stroke) {
     const strokes = Array.isArray(nodeData.effects.stroke) ? nodeData.effects.stroke : [nodeData.effects.stroke];
     const firstStroke = strokes[0];
     if (firstStroke && firstStroke.color) {
@@ -1165,7 +1182,11 @@ async function createRectangle(nodeData: FigmaNodeExport, parent: FrameNode | Gr
         opacity: firstStroke.color.a
       }];
       rect.strokeWeight = firstStroke.weight;
+    } else {
+      rect.strokes = []; // 스트로크 데이터 없으면 기본 스트로크 제거
     }
+  } else {
+    rect.strokes = []; // Figma 기본 스트로크 제거
   }
 
   // 그림자 효과 적용

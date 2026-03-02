@@ -57,6 +57,10 @@ interface FigmaNodeExport {
     tx?: number;  // 이동 X (텍스트 위치 보정용)
     ty?: number;  // 이동 Y (텍스트 위치 보정용)
   };
+  // 텍스트 형태 및 기준점 (정렬 위치 보정용)
+  textShapeType?: 'point' | 'box';
+  textPointBase?: number[];  // [x, y]
+  textBoxBounds?: number[];  // [top, left, bottom, right]
   imageFileName?: string;
   imageData?: string; // base64 encoded PNG
   // 클리핑 마스크
@@ -824,8 +828,8 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
   }
 
   // 텍스트 정렬 설정
-  const textAlign = nodeData.textStyle?.textAlign || 'left';
-  const alignMap: Record<string, TextNode['textAlignHorizontal']> = {
+  var textAlign = (nodeData.textStyle && nodeData.textStyle.textAlign) ? nodeData.textStyle.textAlign : 'left';
+  var alignMap: Record<string, TextNode['textAlignHorizontal']> = {
     'left': 'LEFT',
     'center': 'CENTER',
     'right': 'RIGHT',
@@ -833,16 +837,44 @@ async function createText(nodeData: FigmaNodeExport, parent: FrameNode | GroupNo
   };
   text.textAlignHorizontal = alignMap[textAlign] || 'LEFT';
 
-  // 텍스트 자동 크기 조절
-  // 모든 텍스트에 자동 크기 적용 (명시적 \n만 줄바꿈)
-  // 고정 너비 사용시 폰트 렌더링 차이로 줄바꿈 문제 발생
-  text.textAutoResize = 'WIDTH_AND_HEIGHT';
+  // 텍스트 형태에 따른 크기 조절 및 위치 설정
+  var shapeType = nodeData.textShapeType;
+  var boxBounds = nodeData.textBoxBounds; // [top, left, bottom, right]
 
-  // 위치 설정
-  // PSD bounds (nodeData.x, nodeData.y)를 기본으로 사용
-  // bounds는 렌더링된 텍스트의 실제 바운딩 박스 위치
-  text.x = nodeData.x;
-  text.y = nodeData.y;
+  if (shapeType === 'box' && boxBounds && boxBounds.length >= 4) {
+    // 박스(영역) 텍스트: 고정 너비로 설정하여 정렬이 자연스럽게 동작
+    var boxWidth = boxBounds[3] - boxBounds[1];  // right - left
+    text.textAutoResize = 'HEIGHT';
+    text.resize(Math.max(1, boxWidth), text.height);
+    text.x = nodeData.x;
+    text.y = nodeData.y;
+  } else if (textAlign === 'center' || textAlign === 'right') {
+    // 가운데/오른쪽 정렬 포인트 텍스트: 고정 너비 박스로 처리
+    // Figma 대체 폰트가 PSD 폰트보다 넓을 수 있으므로
+    // max(psdWidth, figmaWidth)로 박스 너비를 결정하여 줄바꿈 오버플로우 방지
+    var figmaWidth = text.width; // WIDTH_AND_HEIGHT 기본모드에서 자동 계산된 실제 렌더 너비
+    var psdWidth = nodeData.width;
+    var useWidth = Math.max(psdWidth, figmaWidth);
+
+    text.textAutoResize = 'HEIGHT';
+    text.resize(Math.max(1, useWidth), text.height);
+
+    // PSD 앵커 포인트 기준으로 x 보정
+    if (textAlign === 'center') {
+      var psdCenter = nodeData.x + psdWidth / 2;
+      text.x = psdCenter - useWidth / 2;
+    } else {
+      // right: PSD 오른쪽 끝 유지
+      var psdRight = nodeData.x + psdWidth;
+      text.x = psdRight - useWidth;
+    }
+    text.y = nodeData.y;
+  } else {
+    // 포인트 텍스트 + 왼쪽 정렬: 기존 로직
+    text.textAutoResize = 'WIDTH_AND_HEIGHT';
+    text.x = nodeData.x;
+    text.y = nodeData.y;
+  }
 
   // 회전 적용
   if (nodeData.textTransform?.rotation) {

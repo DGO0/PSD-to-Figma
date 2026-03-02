@@ -92,6 +92,10 @@ export interface FigmaNodeExport {
     tx?: number;  // 이동 X (텍스트 위치 보정용)
     ty?: number;  // 이동 Y (텍스트 위치 보정용)
   };
+  // 텍스트 형태 및 기준점 (정렬 위치 보정용)
+  textShapeType?: 'point' | 'box';
+  textPointBase?: number[];  // [x, y]
+  textBoxBounds?: number[];  // [top, left, bottom, right]
   // 이미지 전용
   imageFileName?: string;
   imageData?: string; // base64 encoded PNG
@@ -566,6 +570,17 @@ export class PsdToFigmaConverter {
             ty: t.ty,
           };
         }
+      }
+
+      // 텍스트 형태 및 기준점 (정렬 위치 보정용)
+      if (layer.textData.shapeType) {
+        baseNode.textShapeType = layer.textData.shapeType;
+      }
+      if (layer.textData.pointBase) {
+        baseNode.textPointBase = layer.textData.pointBase;
+      }
+      if (layer.textData.boxBounds) {
+        baseNode.textBoxBounds = layer.textData.boxBounds;
       }
 
       return baseNode;

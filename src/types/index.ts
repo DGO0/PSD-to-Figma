@@ -325,6 +325,12 @@ export interface TextLayerData {
   styleRuns?: TextStyleRun[];
   // 텍스트 변환 (회전, 스케일 등)
   transform?: TextTransform;
+  // 텍스트 형태: point(포인트 텍스트) / box(영역 텍스트)
+  shapeType?: 'point' | 'box';
+  // 포인트 텍스트 기준점 [x, y]
+  pointBase?: number[];
+  // 박스 텍스트 영역 [top, left, bottom, right]
+  boxBounds?: number[];
 }
 
 // 텍스트 변환 매트릭스

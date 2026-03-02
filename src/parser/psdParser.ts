@@ -597,6 +597,11 @@ export class PsdParser {
     let text = textInfo.text || '';
     text = text.replace(/\u0003/g, '\n');
 
+    // 텍스트 형태 정보 추출 (point text vs box text)
+    const shapeType = (textInfo as any).shapeType as 'point' | 'box' | undefined;
+    const pointBase = (textInfo as any).pointBase as number[] | undefined;
+    const boxBounds = (textInfo as any).boxBounds as number[] | undefined;
+
     return {
       text,
       fontSize: scaledFontSize,
@@ -610,6 +615,9 @@ export class PsdParser {
       strikethrough: strikethrough || undefined,
       styleRuns: parsedStyleRuns,
       transform,
+      shapeType,
+      pointBase,
+      boxBounds,
     };
   }
 

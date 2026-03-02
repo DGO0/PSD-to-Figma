@@ -423,6 +423,10 @@ export class PsdParser {
     if (layer.vectorMask || layer.vectorStroke) {
       return 'shape';
     }
+    // 추가 도형 판별: vectorFill, fillColor, vectorOrigination이 있으면 도형
+    if ((layer as any).vectorFill || (layer as any).fillColor || (layer as any).vectorOrigination) {
+      return 'shape';
+    }
     return 'layer';
   }
 

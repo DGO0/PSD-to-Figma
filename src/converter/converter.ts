@@ -587,7 +587,8 @@ export class PsdToFigmaConverter {
     }
 
     // 이미지 레이어 처리
-    if (layer.imageData && this.options.exportImages) {
+    // shape + vectorFill이면 imageData는 ag-psd 래스터 렌더링 결과이므로 스킵
+    if (layer.imageData && this.options.exportImages && !(layer.type === 'shape' && layer.vectorFill)) {
       this.summary.imageLayers++;
 
       // 파싱 중 스트리밍으로 이미 저장된 경우 확인
